@@ -76,6 +76,32 @@ class DefaultMemoryManagerTest {
             manager.currentConversation()
         )
     }
+
+    @Test
+    fun `appendUserMessage returns effective context from strategy`() {
+        val tempDir = Files.createTempDirectory("memory-manager-test")
+        val store = JsonConversationStore(tempDir.resolve("conversation.json"))
+        val manager = DefaultMemoryManager(
+            languageModel = FakeLanguageModel(),
+            systemPrompt = "Системное сообщение",
+            conversationStore = store,
+            memoryStrategy = LastMessageOnlyStrategy()
+        )
+
+        val conversation = manager.appendUserMessage("Привет")
+
+        assertEquals(
+            listOf(ChatMessage(role = ChatRole.USER, content = "Привет")),
+            conversation
+        )
+        assertEquals(
+            listOf(
+                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
+                ChatMessage(role = ChatRole.USER, content = "Привет")
+            ),
+            manager.currentConversation()
+        )
+    }
 }
 
 private class FakeLanguageModel : LanguageModel {
@@ -88,4 +114,9 @@ private class FakeLanguageModel : LanguageModel {
 
     override fun complete(messages: List<ChatMessage>): LanguageModelResponse =
         error("РќРµ РґРѕР»Р¶РµРЅ РІС‹Р·С‹РІР°С‚СЊСЃСЏ РІ СЌС‚РѕРј С‚РµСЃС‚Рµ.")
+}
+
+private class LastMessageOnlyStrategy : MemoryStrategy {
+    override fun messagesForModel(messages: List<ChatMessage>): List<ChatMessage> =
+        messages.takeLast(1)
 }

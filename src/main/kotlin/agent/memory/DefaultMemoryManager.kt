@@ -11,7 +11,8 @@ import llm.core.model.ChatRole
 class DefaultMemoryManager(
     private val languageModel: LanguageModel,
     private val systemPrompt: String,
-    private val conversationStore: JsonConversationStore = JsonConversationStore.forLanguageModel(languageModel)
+    private val conversationStore: JsonConversationStore = JsonConversationStore.forLanguageModel(languageModel),
+    private val memoryStrategy: MemoryStrategy = NoCompressionMemoryStrategy()
 ) : MemoryManager {
     private val conversationMapper = ChatMessageConversationMapper()
     private val conversation = loadConversation().toMutableList()
@@ -19,10 +20,13 @@ class DefaultMemoryManager(
     override fun currentConversation(): List<ChatMessage> = conversation.toList()
 
     override fun previewTokenStats(userPrompt: String): AgentTokenStats {
-        val historyTokens = languageModel.tokenCounter?.countMessages(conversation)
+        val effectiveConversation = effectiveConversation()
+        val historyTokens = languageModel.tokenCounter?.countMessages(effectiveConversation)
         val userPromptTokens = languageModel.tokenCounter?.countText(userPrompt)
         val promptTokensLocal = languageModel.tokenCounter?.countMessages(
-            conversation + ChatMessage(role = ChatRole.USER, content = userPrompt)
+            memoryStrategy.messagesForModel(
+                conversation + ChatMessage(role = ChatRole.USER, content = userPrompt)
+            )
         )
 
         return AgentTokenStats(
@@ -35,7 +39,7 @@ class DefaultMemoryManager(
     override fun appendUserMessage(userPrompt: String): List<ChatMessage> {
         conversation += ChatMessage(role = ChatRole.USER, content = userPrompt)
         saveConversation()
-        return currentConversation()
+        return effectiveConversation()
     }
 
     override fun appendAssistantMessage(content: String) {
@@ -83,4 +87,7 @@ class DefaultMemoryManager(
             role = ChatRole.SYSTEM,
             content = systemPrompt
         )
+
+    private fun effectiveConversation(): List<ChatMessage> =
+        memoryStrategy.messagesForModel(conversation)
 }
