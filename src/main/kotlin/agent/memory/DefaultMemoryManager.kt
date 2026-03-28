@@ -3,6 +3,7 @@ package agent.memory
 import agent.core.AgentTokenStats
 import agent.storage.JsonConversationStore
 import agent.storage.mapper.ChatMessageConversationMapper
+import agent.storage.model.ConversationMemoryState
 import java.nio.file.Path
 import llm.core.LanguageModel
 import llm.core.model.ChatMessage
@@ -15,6 +16,7 @@ class DefaultMemoryManager(
     private val memoryStrategy: MemoryStrategy = NoCompressionMemoryStrategy()
 ) : MemoryManager {
     private val conversationMapper = ChatMessageConversationMapper()
+    private var memoryState = conversationStore.loadState()
     private val conversation = loadConversation().toMutableList()
 
     override fun currentConversation(): List<ChatMessage> = conversation.toList()
@@ -54,7 +56,7 @@ class DefaultMemoryManager(
     }
 
     override fun replaceContextFromFile(sourcePath: Path) {
-        val importedMessages = JsonConversationStore(sourcePath).load()
+        val importedMessages = JsonConversationStore(sourcePath).loadState().messages
             .map(conversationMapper::fromStoredMessage)
 
         require(importedMessages.isNotEmpty()) {
@@ -67,19 +69,26 @@ class DefaultMemoryManager(
     }
 
     private fun loadConversation(): List<ChatMessage> {
-        val savedConversation = conversationStore.load()
+        val savedConversation = memoryState.messages
             .map(conversationMapper::fromStoredMessage)
         if (savedConversation.isNotEmpty()) {
             return savedConversation
         }
 
         val initialConversation = listOf(createSystemMessage())
-        conversationStore.save(initialConversation.map(conversationMapper::toStoredMessage))
+        saveConversation(initialConversation)
         return initialConversation
     }
 
     private fun saveConversation() {
-        conversationStore.save(conversation.map(conversationMapper::toStoredMessage))
+        saveConversation(conversation)
+    }
+
+    private fun saveConversation(messages: List<ChatMessage>) {
+        memoryState = memoryState.copy(
+            messages = messages.map(conversationMapper::toStoredMessage)
+        )
+        conversationStore.saveState(memoryState)
     }
 
     private fun createSystemMessage(): ChatMessage =

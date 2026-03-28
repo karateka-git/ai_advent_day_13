@@ -31,6 +31,7 @@ fun main() {
         config = config,
         httpClient = httpClient
     )
+    warmUpTokenCounter(languageModel)
     var agent: Agent<String> = MrAgent(languageModel = languageModel)
 
     println("Чат готов. Введите 'exit' или 'quit', чтобы завершить работу.")
@@ -83,6 +84,7 @@ fun main() {
                     config = config,
                     httpClient = httpClient
                 )
+                warmUpTokenCounter(languageModel)
                 agent = MrAgent(languageModel = languageModel)
                 println("Текущая модель изменена.")
                 printCurrentModelInfo(agent)
@@ -150,6 +152,10 @@ private fun currentModelId(languageModel: LanguageModel): String =
         "HuggingFaceLanguageModel" -> "huggingface"
         else -> languageModel.info.name.lowercase()
     }
+
+private fun warmUpTokenCounter(languageModel: LanguageModel) {
+    languageModel.tokenCounter?.countText("")
+}
 
 private fun detectConsoleCharset(): Charset {
     val nativeEncoding = System.getProperty("native.encoding")

@@ -1,9 +1,11 @@
 package agent.storage
 
+import agent.storage.model.ConversationMemoryState
 import agent.storage.model.ConversationHistory
 import agent.storage.model.StoredMessage
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import llm.core.LanguageModel
 
@@ -17,20 +19,26 @@ class JsonConversationStore(
         prettyPrint = true
     }
 
-    override fun load(): List<StoredMessage> {
+    override fun loadState(): ConversationMemoryState {
         if (!Files.exists(storagePath)) {
-            return emptyList()
+            return ConversationMemoryState()
         }
 
         val rawContent = Files.readString(storagePath)
         if (rawContent.isBlank()) {
-            return emptyList()
+            return ConversationMemoryState()
         }
 
-        return json.decodeFromString<ConversationHistory>(rawContent).messages
+        return try {
+            json.decodeFromString<ConversationMemoryState>(rawContent)
+        } catch (_: SerializationException) {
+            ConversationMemoryState(
+                messages = json.decodeFromString<ConversationHistory>(rawContent).messages
+            )
+        }
     }
 
-    override fun save(messages: List<StoredMessage>) {
+    override fun saveState(state: ConversationMemoryState) {
         val parent = storagePath.parent
         if (parent != null) {
             Files.createDirectories(parent)
@@ -38,7 +46,7 @@ class JsonConversationStore(
 
         Files.writeString(
             storagePath,
-            json.encodeToString(ConversationHistory(messages))
+            json.encodeToString(state)
         )
     }
 
