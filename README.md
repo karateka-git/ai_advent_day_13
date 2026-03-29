@@ -91,6 +91,107 @@ sequenceDiagram
     M-->>U: "Ответ + статистика токенов"
 ```
 
+## Диаграмма классов
+
+```mermaid
+classDiagram
+    class Agent~T~ {
+      <<interface>>
+      +previewTokenStats(userPrompt)
+      +ask(userPrompt)
+      +clearContext()
+      +replaceContextFromFile(path)
+    }
+    class MrAgent
+
+    class MemoryManager {
+      <<interface>>
+      +currentConversation()
+      +previewTokenStats(userPrompt)
+      +appendUserMessage(userPrompt)
+      +appendAssistantMessage(content)
+      +clear()
+    }
+    class DefaultMemoryManager
+
+    class MemoryStrategy {
+      <<interface>>
+      +id
+      +effectiveContext(state)
+      +refreshState(state)
+    }
+    class NoCompressionMemoryStrategy
+    class SummaryCompressionMemoryStrategy
+
+    class ConversationSummarizer {
+      <<interface>>
+      +summarize(messages)
+    }
+    class LlmConversationSummarizer
+
+    class LanguageModel {
+      <<interface>>
+      +info
+      +tokenCounter
+      +complete(messages)
+    }
+    class TimewebLanguageModel
+    class HuggingFaceLanguageModel
+
+    class TokenCounter {
+      <<interface>>
+      +countText(text)
+      +countMessages(messages)
+    }
+
+    class ConversationStore {
+      <<interface>>
+      +loadState()
+      +saveState(state)
+    }
+    class JsonConversationStore
+
+    class AgentLifecycleListener {
+      <<interface>>
+      +onModelWarmupStarted()
+      +onModelWarmupFinished()
+      +onContextCompressionStarted()
+      +onContextCompressionFinished(stats)
+    }
+    class ConsoleAgentLifecycleListener
+    class NoOpAgentLifecycleListener
+
+    class ResponseFormat~T~ {
+      <<interface>>
+      +formatInstruction
+      +parse(rawResponse)
+    }
+    class TextResponseFormat
+
+    Agent <|.. MrAgent
+    MemoryManager <|.. DefaultMemoryManager
+    MemoryStrategy <|.. NoCompressionMemoryStrategy
+    MemoryStrategy <|.. SummaryCompressionMemoryStrategy
+    ConversationSummarizer <|.. LlmConversationSummarizer
+    LanguageModel <|.. TimewebLanguageModel
+    LanguageModel <|.. HuggingFaceLanguageModel
+    ConversationStore <|.. JsonConversationStore
+    AgentLifecycleListener <|.. ConsoleAgentLifecycleListener
+    AgentLifecycleListener <|.. NoOpAgentLifecycleListener
+    ResponseFormat~T~ <|.. TextResponseFormat
+
+    MrAgent --> MemoryManager : uses
+    MrAgent --> LanguageModel : uses
+    MrAgent --> ResponseFormat~T~ : uses
+    DefaultMemoryManager --> MemoryStrategy : delegates to
+    DefaultMemoryManager --> ConversationStore : persists to
+    DefaultMemoryManager --> AgentLifecycleListener : emits events to
+    SummaryCompressionMemoryStrategy --> ConversationSummarizer : delegates to
+    LlmConversationSummarizer --> LanguageModel : uses for summary call
+    TimewebLanguageModel --> TokenCounter : provides
+    HuggingFaceLanguageModel --> TokenCounter : provides
+```
+
 ## Как используются программные части
 
 ### Точка входа
