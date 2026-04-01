@@ -1,15 +1,17 @@
-﻿import agent.core.Agent
+package ui.cli
+
+import agent.core.Agent
 import agent.lifecycle.AgentLifecycleListener
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
+import app.output.AppEvent
+import app.output.AppEventSink
 import java.net.http.HttpClient
 import java.util.Properties
 import llm.core.LanguageModel
 import llm.core.LanguageModelFactory
 import llm.core.model.ChatRole
 import llm.core.model.LanguageModelOption
-import ui.UiEvent
-import ui.UiEventSink
 
 /**
  * Исполняет команды CLI и обычные пользовательские prompt в рамках одной сессии.
@@ -19,7 +21,7 @@ class CliSessionController(
     private val config: Properties,
     private val httpClient: HttpClient,
     private val lifecycleListener: AgentLifecycleListener,
-    private val uiEventSink: UiEventSink,
+    private val appEventSink: AppEventSink,
     private val commandParser: CliCommandParser = CliCommandParser(),
     private val createLanguageModel: (String, Properties, HttpClient) -> LanguageModel,
     private val availableModelsProvider: (Properties) -> List<LanguageModelOption> = LanguageModelFactory::availableModels,
@@ -40,19 +42,19 @@ class CliSessionController(
         return when (val command = commandParser.parse(input)) {
             CliCommand.Empty -> CliSessionControllerResult.Continue
             CliCommand.Exit -> {
-                uiEventSink.emit(UiEvent.SessionFinished)
+                appEventSink.emit(AppEvent.SessionFinished)
                 CliSessionControllerResult.ExitRequested
             }
 
             CliCommand.Clear -> {
                 state.agent.clearContext()
-                uiEventSink.emit(UiEvent.ContextCleared)
+                appEventSink.emit(AppEvent.ContextCleared)
                 CliSessionControllerResult.Continue
             }
 
             CliCommand.ShowModels -> {
-                uiEventSink.emit(
-                    UiEvent.ModelsAvailable(
+                appEventSink.emit(
+                    AppEvent.ModelsAvailable(
                         options = availableModelsProvider(config),
                         currentModelId = state.modelId
                     )
@@ -62,40 +64,40 @@ class CliSessionController(
 
             is CliCommand.CreateCheckpoint -> {
                 try {
-                    uiEventSink.emit(
-                        UiEvent.CheckpointCreated(
+                    appEventSink.emit(
+                        AppEvent.CheckpointCreated(
                             state.agent.createCheckpoint(command.name)
                         )
                     )
                 } catch (error: Exception) {
-                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
                 }
                 CliSessionControllerResult.Continue
             }
 
             CliCommand.ShowBranches -> {
                 try {
-                    uiEventSink.emit(UiEvent.BranchStatusAvailable(state.agent.branchStatus()))
+                    appEventSink.emit(AppEvent.BranchStatusAvailable(state.agent.branchStatus()))
                 } catch (error: Exception) {
-                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
                 }
                 CliSessionControllerResult.Continue
             }
 
             is CliCommand.CreateBranch -> {
                 try {
-                    uiEventSink.emit(UiEvent.BranchCreated(state.agent.createBranch(command.name)))
+                    appEventSink.emit(AppEvent.BranchCreated(state.agent.createBranch(command.name)))
                 } catch (error: Exception) {
-                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
                 }
                 CliSessionControllerResult.Continue
             }
 
             is CliCommand.SwitchBranch -> {
                 try {
-                    uiEventSink.emit(UiEvent.BranchSwitched(state.agent.switchBranch(command.name)))
+                    appEventSink.emit(AppEvent.BranchSwitched(state.agent.switchBranch(command.name)))
                 } catch (error: Exception) {
-                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
                 }
                 CliSessionControllerResult.Continue
             }
@@ -107,17 +109,17 @@ class CliSessionController(
 
             is CliCommand.UserPrompt -> {
                 try {
-                    uiEventSink.emit(UiEvent.TokenPreviewAvailable(state.agent.previewTokenStats(command.value)))
+                    appEventSink.emit(AppEvent.TokenPreviewAvailable(state.agent.previewTokenStats(command.value)))
                     val response = state.agent.ask(command.value)
-                    uiEventSink.emit(
-                        UiEvent.AssistantResponseAvailable(
+                    appEventSink.emit(
+                        AppEvent.AssistantResponseAvailable(
                             role = ChatRole.ASSISTANT,
                             content = response.content,
                             tokenStats = response.tokenStats
                         )
                     )
                 } catch (error: Exception) {
-                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
                 }
 
                 CliSessionControllerResult.Continue
@@ -145,15 +147,15 @@ class CliSessionController(
                 agent = agent,
                 memoryStrategyOption = selectedStrategy
             )
-            uiEventSink.emit(UiEvent.ModelChanged)
-            uiEventSink.emit(
-                UiEvent.AgentInfoAvailable(
+            appEventSink.emit(AppEvent.ModelChanged)
+            appEventSink.emit(
+                AppEvent.AgentInfoAvailable(
                     info = agent.info,
                     strategy = selectedStrategy
                 )
             )
         } catch (error: Exception) {
-            uiEventSink.emit(UiEvent.ModelSwitchFailed(error.message))
+            appEventSink.emit(AppEvent.ModelSwitchFailed(error.message))
         }
     }
 }
@@ -172,4 +174,3 @@ sealed interface CliSessionControllerResult {
      */
     data object ExitRequested : CliSessionControllerResult
 }
-

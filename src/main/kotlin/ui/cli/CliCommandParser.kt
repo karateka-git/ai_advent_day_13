@@ -1,4 +1,6 @@
-﻿/**
+package ui.cli
+
+/**
  * Разбирает строку пользовательского ввода в типизированную CLI-команду.
  */
 class CliCommandParser {
@@ -94,4 +96,3 @@ sealed interface CliCommand {
         val value: String
     ) : CliCommand
 }
-

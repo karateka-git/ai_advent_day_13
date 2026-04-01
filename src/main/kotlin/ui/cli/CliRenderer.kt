@@ -1,8 +1,8 @@
 ﻿package ui.cli
 
+import app.output.AppEvent
+import app.output.AppEventSink
 import agent.memory.strategy.MemoryStrategyOption
-import ui.UiEvent
-import ui.UiEventSink
 
 /**
  * CLI-реализация presentation-слоя, которая отвечает за весь пользовательский вывод.
@@ -10,10 +10,10 @@ import ui.UiEventSink
 class CliRenderer(
     private val loadingIndicator: LoadingIndicator = LoadingIndicator(),
     private val tokenStatsFormatter: ConsoleTokenStatsFormatter = ConsoleTokenStatsFormatter()
-) : UiEventSink {
-    override fun emit(event: UiEvent) {
+) : AppEventSink {
+    override fun emit(event: AppEvent) {
         when (event) {
-            is UiEvent.SessionStarted -> {
+            is AppEvent.SessionStarted -> {
                 println("Чат готов. Введите 'exit' или 'quit', чтобы завершить работу.")
                 println(
                     "Для просмотра моделей введите '${event.modelsCommand}'. " +
@@ -21,18 +21,18 @@ class CliRenderer(
                 )
             }
 
-            is UiEvent.MemoryStrategySelectionRequested -> {
+            is AppEvent.MemoryStrategySelectionRequested -> {
                 println("Выберите стратегию памяти для нового агента:")
                 event.options.forEachIndexed { index, option ->
                     println("${index + 1}. ${option.displayName} - ${option.description}")
                 }
             }
 
-            is UiEvent.MemoryStrategySelectionPromptRequested -> {
+            is AppEvent.MemoryStrategySelectionPromptRequested -> {
                 print("Введите номер стратегии [1-${event.optionsCount}]: ")
             }
 
-            is UiEvent.MemoryStrategySelected -> {
+            is AppEvent.MemoryStrategySelected -> {
                 println("Выбрана стратегия: ${event.option.displayName}")
                 println("Как работает: ${event.option.description}")
                 printAdditionalCommands(
@@ -41,11 +41,11 @@ class CliRenderer(
                 )
             }
 
-            UiEvent.MemoryStrategySelectionRejected -> {
+            AppEvent.MemoryStrategySelectionRejected -> {
                 println("Некорректный выбор. Попробуйте ещё раз.")
             }
 
-            is UiEvent.AgentInfoAvailable -> {
+            is AppEvent.AgentInfoAvailable -> {
                 println("Агент: ${event.info.name}")
                 println("Описание: ${event.info.description}")
                 println("Модель: ${event.info.model}")
@@ -57,7 +57,7 @@ class CliRenderer(
                 )
             }
 
-            is UiEvent.ModelsAvailable -> {
+            is AppEvent.ModelsAvailable -> {
                 println(
                     buildString {
                         appendLine("Доступные модели:")
@@ -77,21 +77,21 @@ class CliRenderer(
                 )
             }
 
-            is UiEvent.CheckpointCreated -> {
+            is AppEvent.CheckpointCreated -> {
                 println("Создан checkpoint: ${event.info.name}")
                 println("Исходная ветка: ${event.info.sourceBranchName}")
             }
 
-            is UiEvent.BranchCreated -> {
+            is AppEvent.BranchCreated -> {
                 println("Создана ветка: ${event.info.name}")
                 println("Источник: ${event.info.sourceCheckpointName ?: "без checkpoint"}")
             }
 
-            is UiEvent.BranchSwitched -> {
+            is AppEvent.BranchSwitched -> {
                 println("Активная ветка: ${event.info.name}")
             }
 
-            is UiEvent.BranchStatusAvailable -> {
+            is AppEvent.BranchStatusAvailable -> {
                 println("Активная ветка: ${event.status.activeBranchName}")
                 println("Последний checkpoint: ${event.status.latestCheckpointName ?: "нет"}")
                 println("Ветки:")
@@ -101,11 +101,11 @@ class CliRenderer(
                 }
             }
 
-            is UiEvent.UserInputPrompt -> {
+            is AppEvent.UserInputPrompt -> {
                 print("${event.role.displayName}: ")
             }
 
-            is UiEvent.AssistantResponseAvailable -> {
+            is AppEvent.AssistantResponseAvailable -> {
                 println()
                 println("${event.role.displayName}: ${event.content}")
                 tokenStatsFormatter.formatResponse(event.tokenStats)?.let {
@@ -115,7 +115,7 @@ class CliRenderer(
                 println()
             }
 
-            is UiEvent.TokenPreviewAvailable -> {
+            is AppEvent.TokenPreviewAvailable -> {
                 tokenStatsFormatter.formatPreview(event.tokenStats)?.let { preview ->
                     println()
                     println(preview)
@@ -123,18 +123,18 @@ class CliRenderer(
                 }
             }
 
-            UiEvent.ContextCleared -> println("Контекст очищен. Системное сообщение сохранено.")
-            UiEvent.ModelChanged -> println("Текущая модель изменена.")
-            is UiEvent.ModelSwitchFailed -> println("Не удалось переключить модель: ${event.details}")
-            is UiEvent.RequestFailed -> println("Не удалось выполнить запрос: ${event.details}")
-            UiEvent.SessionFinished -> println("Чат завершён.")
-            UiEvent.ModelWarmupStarted -> loadingIndicator.start("Подготовка модели")
-            UiEvent.ModelWarmupFinished -> loadingIndicator.stop()
-            UiEvent.ModelRequestStarted -> loadingIndicator.start("Ассистент думает")
-            UiEvent.ModelRequestFinished -> loadingIndicator.stop()
-            UiEvent.ContextCompressionStarted -> loadingIndicator.start("Сжимаем контекст")
+            AppEvent.ContextCleared -> println("Контекст очищен. Системное сообщение сохранено.")
+            AppEvent.ModelChanged -> println("Текущая модель изменена.")
+            is AppEvent.ModelSwitchFailed -> println("Не удалось переключить модель: ${event.details}")
+            is AppEvent.RequestFailed -> println("Не удалось выполнить запрос: ${event.details}")
+            AppEvent.SessionFinished -> println("Чат завершён.")
+            AppEvent.ModelWarmupStarted -> loadingIndicator.start("Подготовка модели")
+            AppEvent.ModelWarmupFinished -> loadingIndicator.stop()
+            AppEvent.ModelRequestStarted -> loadingIndicator.start("Ассистент думает")
+            AppEvent.ModelRequestFinished -> loadingIndicator.stop()
+            AppEvent.ContextCompressionStarted -> loadingIndicator.start("Сжимаем контекст")
 
-            is UiEvent.ContextCompressionFinished -> {
+            is AppEvent.ContextCompressionFinished -> {
                 loadingIndicator.stop()
 
                 val message =

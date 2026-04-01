@@ -1,7 +1,7 @@
 ﻿import agent.core.Agent
 import agent.impl.MrAgent
 import agent.lifecycle.AgentLifecycleListener
-import agent.lifecycle.UiEventLifecycleListener
+import agent.lifecycle.AppEventLifecycleListener
 import agent.memory.strategy.MemoryStrategyFactory
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
@@ -15,8 +15,12 @@ import java.util.Properties
 import llm.core.LanguageModel
 import llm.core.LanguageModelFactory
 import llm.core.model.ChatRole
-import ui.UiEvent
-import ui.UiEventSink
+import app.output.AppEvent
+import app.output.AppEventSink
+import ui.cli.CliCommands
+import ui.cli.CliSessionController
+import ui.cli.CliSessionControllerResult
+import ui.cli.CliSessionState
 import ui.cli.CliRenderer
 
 private const val CONFIG_FILE = "config/app.properties"
@@ -35,8 +39,8 @@ private val systemConsole = System.console()
 fun main() {
     val config = loadConfig()
     val httpClient = HttpClient.newHttpClient()
-    val uiEventSink: UiEventSink = CliRenderer()
-    val lifecycleListener: AgentLifecycleListener = UiEventLifecycleListener(uiEventSink)
+    val appEventSink: AppEventSink = CliRenderer()
+    val lifecycleListener: AgentLifecycleListener = AppEventLifecycleListener(appEventSink)
 
     val languageModel: LanguageModel = LanguageModelFactory.createDefault(
         config = config,
@@ -60,28 +64,28 @@ fun main() {
         config = config,
         httpClient = httpClient,
         lifecycleListener = lifecycleListener,
-        uiEventSink = uiEventSink,
+        appEventSink = appEventSink,
         createLanguageModel = LanguageModelFactory::create,
         createAgent = ::createAgent,
-        selectMemoryStrategy = { selectMemoryStrategyOption(uiEventSink) },
+        selectMemoryStrategy = { selectMemoryStrategyOption(appEventSink) },
         warmUpLanguageModel = ::warmUpTokenCounter
     )
 
-    uiEventSink.emit(
-        UiEvent.SessionStarted(
+    appEventSink.emit(
+        AppEvent.SessionStarted(
             modelsCommand = CliCommands.MODELS,
             useCommand = CliCommands.USE
         )
     )
-    uiEventSink.emit(
-        UiEvent.AgentInfoAvailable(
+    appEventSink.emit(
+        AppEvent.AgentInfoAvailable(
             info = sessionController.state.agent.info,
             strategy = defaultMemoryStrategyOption
         )
     )
 
     while (true) {
-        uiEventSink.emit(UiEvent.UserInputPrompt(ChatRole.USER))
+        appEventSink.emit(AppEvent.UserInputPrompt(ChatRole.USER))
         val prompt = readConsoleLine()?.trim() ?: break
 
         when (sessionController.handle(prompt)) {
@@ -120,22 +124,22 @@ private fun createAgent(
 /**
  * Предлагает пользователю выбрать одну из доступных стратегий памяти при смене модели.
  */
-private fun selectMemoryStrategyOption(uiEventSink: UiEventSink): MemoryStrategyOption {
+private fun selectMemoryStrategyOption(appEventSink: AppEventSink): MemoryStrategyOption {
     val options = MemoryStrategyFactory.availableOptions()
-    uiEventSink.emit(UiEvent.MemoryStrategySelectionRequested(options))
+    appEventSink.emit(AppEvent.MemoryStrategySelectionRequested(options))
 
     while (true) {
-        uiEventSink.emit(UiEvent.MemoryStrategySelectionPromptRequested(options.size))
+        appEventSink.emit(AppEvent.MemoryStrategySelectionPromptRequested(options.size))
         val selection = readConsoleLine()?.trim().orEmpty()
         val index = selection.toIntOrNull()
 
         if (index != null && index in 1..options.size) {
             val option = options[index - 1]
-            uiEventSink.emit(UiEvent.MemoryStrategySelected(option))
+            appEventSink.emit(AppEvent.MemoryStrategySelected(option))
             return option
         }
 
-        uiEventSink.emit(UiEvent.MemoryStrategySelectionRejected)
+        appEventSink.emit(AppEvent.MemoryStrategySelectionRejected)
     }
 }
 

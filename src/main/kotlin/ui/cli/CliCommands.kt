@@ -1,4 +1,6 @@
-﻿/**
+package ui.cli
+
+/**
  * Единое описание встроенных CLI-команд.
  */
 object CliCommands {
@@ -11,4 +13,3 @@ object CliCommands {
     const val BRANCH = "branch"
     const val BRANCHES = "branches"
 }
-

@@ -1,4 +1,4 @@
-﻿import agent.core.Agent
+import agent.core.Agent
 import agent.core.AgentInfo
 import agent.core.AgentResponse
 import agent.core.AgentTokenStats
@@ -11,6 +11,8 @@ import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.NoOpAgentLifecycleListener
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
+import app.output.AppEvent
+import app.output.AppEventSink
 import java.net.http.HttpClient
 import java.nio.file.Path
 import java.util.Properties
@@ -22,8 +24,9 @@ import llm.core.model.ChatMessage
 import llm.core.model.LanguageModelInfo
 import llm.core.model.LanguageModelOption
 import llm.core.model.LanguageModelResponse
-import ui.UiEvent
-import ui.UiEventSink
+import ui.cli.CliSessionController
+import ui.cli.CliSessionControllerResult
+import ui.cli.CliSessionState
 
 class CliSessionControllerTest {
     private val config = Properties()
@@ -38,7 +41,7 @@ class CliSessionControllerTest {
     @Test
     fun `clears context for clear command`() {
         val agent = FakeAgent(model = "initial-model")
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val controller = createController(
             sink = sink,
             initialState = initialState(agent = agent)
@@ -48,12 +51,12 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(1, agent.clearCalls)
-        assertEquals(listOf<UiEvent>(UiEvent.ContextCleared), sink.events)
+        assertEquals(listOf<AppEvent>(AppEvent.ContextCleared), sink.events)
     }
 
     @Test
     fun `shows available models using current session model id`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val controller = createController(
             sink = sink,
             initialState = initialState(modelId = "timeweb"),
@@ -72,8 +75,8 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
-            listOf<UiEvent>(
-                UiEvent.ModelsAvailable(
+            listOf<AppEvent>(
+                AppEvent.ModelsAvailable(
                     options = listOf(
                         LanguageModelOption(
                             id = "timeweb",
@@ -90,7 +93,7 @@ class CliSessionControllerTest {
 
     @Test
     fun `switches model asks for memory strategy and updates session state`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val createdModel = FakeLanguageModel(
             name = "HuggingFaceLanguageModel",
             model = "hf-model"
@@ -135,8 +138,8 @@ class CliSessionControllerTest {
         assertEquals(1, warmUpCalls)
         assertEquals(
             listOf(
-                UiEvent.ModelChanged,
-                UiEvent.AgentInfoAvailable(
+                AppEvent.ModelChanged,
+                AppEvent.AgentInfoAvailable(
                     info = recreatedAgent.info,
                     strategy = slidingWindowOption
                 )
@@ -147,18 +150,18 @@ class CliSessionControllerTest {
 
     @Test
     fun `returns exit for exit command`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val controller = createController(sink = sink)
 
         val result = controller.handle("exit")
 
         assertEquals(CliSessionControllerResult.ExitRequested, result)
-        assertEquals(listOf<UiEvent>(UiEvent.SessionFinished), sink.events)
+        assertEquals(listOf<AppEvent>(AppEvent.SessionFinished), sink.events)
     }
 
     @Test
     fun `emits model switch failure for unknown model`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val controller = createController(
             sink = sink,
             createLanguageModel = { _, _, _ ->
@@ -170,14 +173,14 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
-            listOf<UiEvent>(UiEvent.ModelSwitchFailed("Неизвестная модель")),
+            listOf<AppEvent>(AppEvent.ModelSwitchFailed("Неизвестная модель")),
             sink.events
         )
     }
 
     @Test
     fun `creates checkpoint through current agent`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val agent = FakeAgent(
             model = "initial-model",
             checkpointInfo = BranchCheckpointInfo(
@@ -194,8 +197,8 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
-            listOf<UiEvent>(
-                UiEvent.CheckpointCreated(
+            listOf<AppEvent>(
+                AppEvent.CheckpointCreated(
                     BranchCheckpointInfo(name = "checkpoint-1", sourceBranchName = "main")
                 )
             ),
@@ -205,7 +208,7 @@ class CliSessionControllerTest {
 
     @Test
     fun `shows branch status through current agent`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val status = BranchingStatus(
             activeBranchName = "main",
             latestCheckpointName = "checkpoint-1",
@@ -227,14 +230,14 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
-            listOf<UiEvent>(UiEvent.BranchStatusAvailable(status)),
+            listOf<AppEvent>(AppEvent.BranchStatusAvailable(status)),
             sink.events
         )
     }
 
     @Test
     fun `creates branch through current agent`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val branchInfo = BranchInfo(
             name = "option-a",
             sourceCheckpointName = "checkpoint-1",
@@ -253,14 +256,14 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
-            listOf<UiEvent>(UiEvent.BranchCreated(branchInfo)),
+            listOf<AppEvent>(AppEvent.BranchCreated(branchInfo)),
             sink.events
         )
     }
 
     @Test
     fun `switches branch through current agent`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val branchInfo = BranchInfo(
             name = "option-b",
             sourceCheckpointName = "checkpoint-1",
@@ -279,14 +282,14 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
-            listOf<UiEvent>(UiEvent.BranchSwitched(branchInfo)),
+            listOf<AppEvent>(AppEvent.BranchSwitched(branchInfo)),
             sink.events
         )
     }
 
     @Test
     fun `handles regular prompt through current agent`() {
-        val sink = RecordingUiEventSink()
+        val sink = RecordingAppEventSink()
         val agent = FakeAgent(
             model = "initial-model",
             previewTokenStats = AgentTokenStats(historyTokens = 10),
@@ -307,8 +310,8 @@ class CliSessionControllerTest {
         assertEquals(listOf("Расскажи историю"), agent.askInputs)
         assertEquals(
             listOf(
-                UiEvent.TokenPreviewAvailable(AgentTokenStats(historyTokens = 10)),
-                UiEvent.AssistantResponseAvailable(
+                AppEvent.TokenPreviewAvailable(AgentTokenStats(historyTokens = 10)),
+                AppEvent.AssistantResponseAvailable(
                     role = llm.core.model.ChatRole.ASSISTANT,
                     content = "Ответ",
                     tokenStats = AgentTokenStats(promptTokensLocal = 15)
@@ -319,7 +322,7 @@ class CliSessionControllerTest {
     }
 
     private fun createController(
-        sink: RecordingUiEventSink = RecordingUiEventSink(),
+        sink: RecordingAppEventSink = RecordingAppEventSink(),
         initialState: CliSessionState = initialState(),
         createLanguageModel: (String, Properties, HttpClient) -> LanguageModel = { _, _, _ ->
             error("Не должен вызываться в этом тесте.")
@@ -336,7 +339,7 @@ class CliSessionControllerTest {
             config = config,
             httpClient = httpClient,
             lifecycleListener = lifecycleListener,
-            uiEventSink = sink,
+            appEventSink = sink,
             createLanguageModel = createLanguageModel,
             availableModelsProvider = availableModelsProvider,
             createAgent = createAgent,
@@ -360,10 +363,10 @@ class CliSessionControllerTest {
         )
 }
 
-private class RecordingUiEventSink : UiEventSink {
-    val events = mutableListOf<UiEvent>()
+private class RecordingAppEventSink : AppEventSink {
+    val events = mutableListOf<AppEvent>()
 
-    override fun emit(event: UiEvent) {
+    override fun emit(event: AppEvent) {
         events += event
     }
 }
@@ -451,4 +454,3 @@ private class FakeLanguageModel(
     override fun complete(messages: List<ChatMessage>): LanguageModelResponse =
         error("Не должен вызываться в этом тесте.")
 }
-

@@ -1,5 +1,7 @@
-﻿import kotlin.test.Test
+import kotlin.test.Test
 import kotlin.test.assertEquals
+import ui.cli.CliCommand
+import ui.cli.CliCommandParser
 
 class CliCommandParserTest {
     private val parser = CliCommandParser()
@@ -63,4 +65,3 @@ class CliCommandParserTest {
         )
     }
 }
-
