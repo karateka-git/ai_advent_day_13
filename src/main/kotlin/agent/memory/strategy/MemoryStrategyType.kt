@@ -1,4 +1,4 @@
-package agent.memory
+﻿package agent.memory.strategy
 
 /**
  * Тип стратегии памяти с устойчивым строковым идентификатором для CLI и storage.
@@ -8,7 +8,9 @@ package agent.memory
 enum class MemoryStrategyType(val id: String) {
     NO_COMPRESSION("no_compression"),
     SUMMARY_COMPRESSION("summary_compression"),
-    SLIDING_WINDOW("sliding_window");
+    SLIDING_WINDOW("sliding_window"),
+    STICKY_FACTS("sticky_facts"),
+    BRANCHING("branching");
 
     companion object {
         /**
@@ -18,3 +20,5 @@ enum class MemoryStrategyType(val id: String) {
             entries.firstOrNull { it.id == id }
     }
 }
+
+

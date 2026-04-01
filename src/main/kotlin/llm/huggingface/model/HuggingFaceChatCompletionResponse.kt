@@ -1,4 +1,4 @@
-package llm.huggingface.model
+﻿package llm.huggingface.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -24,3 +24,4 @@ data class HuggingFaceUsage(
     @SerialName("total_tokens")
     val totalTokens: Int
 )
+

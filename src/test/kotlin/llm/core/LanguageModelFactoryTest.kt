@@ -1,4 +1,4 @@
-package llm.core
+﻿package llm.core
 
 import java.net.http.HttpClient
 import java.util.Properties
@@ -57,3 +57,4 @@ class LanguageModelFactoryTest {
         assertEquals("HuggingFaceLanguageModel", huggingFaceModel.info.name)
     }
 }
+

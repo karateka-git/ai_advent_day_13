@@ -1,4 +1,4 @@
-package agent.storage.model
+﻿package agent.storage.model
 
 import kotlinx.serialization.Serializable
 
@@ -7,3 +7,4 @@ data class StoredMemoryMetadata(
     val strategyId: String? = null,
     val compressedMessagesCount: Int = 0
 )
+

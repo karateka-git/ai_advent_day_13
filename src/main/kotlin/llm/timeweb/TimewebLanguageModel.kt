@@ -1,4 +1,4 @@
-package llm.timeweb
+﻿package llm.timeweb
 
 import java.net.URI
 import java.net.http.HttpConnectTimeoutException
@@ -102,3 +102,4 @@ private fun Exception.isRetriableNetworkFailure(): Boolean =
         is SSLException -> true
         else -> false
     }
+

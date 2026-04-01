@@ -1,4 +1,4 @@
-package llm.core.model
+﻿package llm.core.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -14,3 +14,4 @@ enum class ChatRole(val apiValue: String, val displayName: String) {
     @SerialName("assistant")
     ASSISTANT("assistant", "Ассистент")
 }
+

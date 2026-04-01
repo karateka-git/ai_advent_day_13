@@ -1,6 +1,6 @@
-package devtools.comparison
+﻿package devtools.comparison
 
-import agent.memory.MemoryStrategyOption
+import agent.memory.strategy.MemoryStrategyOption
 import java.time.Instant
 
 /**
@@ -84,19 +84,19 @@ class StrategyComparisonService(
         executions: List<StrategyExecutionReport>,
         judgeResult: StrategyComparisonJudgeResult? = null
     ): StrategyComparisonReport =
-        StrategyComparisonReport(
-            scenarioName = scenario.name,
+        createReport(
+            comparisonName = scenario.name,
             selectedModelId = selectedModelId,
             providerModelName = providerModelName,
-            generatedAt = generatedAtProvider(),
             executions = executions,
             judgeInput = StrategyComparisonJudgeInput(
-                scenarioName = scenario.name,
+                comparisonName = scenario.name,
                 prompts = scenario.prompts,
                 candidates = executions.map { execution ->
                     StrategyJudgeCandidate(
                         strategyId = execution.strategyId,
                         strategyDisplayName = execution.strategyDisplayName,
+                        scenarioDescription = buildLinearScenarioDescription(scenario),
                         finalResponse = execution.finalResponse,
                         totalLocalPromptTokens = execution.totalLocalPromptTokens,
                         totalProviderTokens = execution.totalProviderTokens
@@ -105,4 +105,33 @@ class StrategyComparisonService(
             ),
             judgeResult = judgeResult
         )
+
+    /**
+     * Строит сериализуемый отчёт из уже собранных результатов и заранее подготовленного judge input.
+     */
+    fun createReport(
+        comparisonName: String,
+        selectedModelId: String,
+        providerModelName: String,
+        executions: List<StrategyExecutionReport>,
+        judgeInput: StrategyComparisonJudgeInput,
+        judgeResult: StrategyComparisonJudgeResult? = null
+    ): StrategyComparisonReport =
+        StrategyComparisonReport(
+            scenarioName = comparisonName,
+            selectedModelId = selectedModelId,
+            providerModelName = providerModelName,
+            generatedAt = generatedAtProvider(),
+            executions = executions,
+            judgeInput = judgeInput,
+            judgeResult = judgeResult
+        )
+
+    private fun buildLinearScenarioDescription(scenario: StrategyComparisonScenario): String =
+        buildString {
+            append("Линейный сценарий '${scenario.name}'. ")
+            append("Сообщения пользователя: ")
+            append(scenario.prompts.joinToString(" | "))
+        }
 }
+

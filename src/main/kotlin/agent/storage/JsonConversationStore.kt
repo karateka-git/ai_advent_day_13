@@ -1,4 +1,4 @@
-package agent.storage
+﻿package agent.storage
 
 import agent.storage.model.ConversationHistory
 import agent.storage.model.ConversationMemoryState
@@ -82,3 +82,4 @@ class JsonConversationStore(
                 .ifBlank { "default" }
     }
 }
+

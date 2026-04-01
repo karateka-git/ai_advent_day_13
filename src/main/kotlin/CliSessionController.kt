@@ -1,7 +1,7 @@
-import agent.core.Agent
+﻿import agent.core.Agent
 import agent.lifecycle.AgentLifecycleListener
-import agent.memory.MemoryStrategyOption
-import agent.memory.MemoryStrategyType
+import agent.memory.strategy.MemoryStrategyOption
+import agent.memory.strategy.MemoryStrategyType
 import java.net.http.HttpClient
 import java.util.Properties
 import llm.core.LanguageModel
@@ -57,6 +57,46 @@ class CliSessionController(
                         currentModelId = state.modelId
                     )
                 )
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.CreateCheckpoint -> {
+                try {
+                    uiEventSink.emit(
+                        UiEvent.CheckpointCreated(
+                            state.agent.createCheckpoint(command.name)
+                        )
+                    )
+                } catch (error: Exception) {
+                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                }
+                CliSessionControllerResult.Continue
+            }
+
+            CliCommand.ShowBranches -> {
+                try {
+                    uiEventSink.emit(UiEvent.BranchStatusAvailable(state.agent.branchStatus()))
+                } catch (error: Exception) {
+                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.CreateBranch -> {
+                try {
+                    uiEventSink.emit(UiEvent.BranchCreated(state.agent.createBranch(command.name)))
+                } catch (error: Exception) {
+                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.SwitchBranch -> {
+                try {
+                    uiEventSink.emit(UiEvent.BranchSwitched(state.agent.switchBranch(command.name)))
+                } catch (error: Exception) {
+                    uiEventSink.emit(UiEvent.RequestFailed(error.message))
+                }
                 CliSessionControllerResult.Continue
             }
 
@@ -132,3 +172,4 @@ sealed interface CliSessionControllerResult {
      */
     data object ExitRequested : CliSessionControllerResult
 }
+

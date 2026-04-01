@@ -1,4 +1,4 @@
-package ui.cli
+﻿package ui.cli
 
 import agent.core.AgentTokenStats
 
@@ -32,3 +32,4 @@ class ConsoleTokenStatsFormatter {
         ).joinToString(separator = System.lineSeparator())
     }
 }
+

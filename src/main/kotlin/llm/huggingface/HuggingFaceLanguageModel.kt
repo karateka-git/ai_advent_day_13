@@ -1,4 +1,4 @@
-package llm.huggingface
+﻿package llm.huggingface
 
 import java.net.URI
 import java.net.http.HttpClient
@@ -64,3 +64,4 @@ class HuggingFaceLanguageModel(
         return responseMapper.toLanguageModelResponse(completion)
     }
 }
+

@@ -1,4 +1,4 @@
-package devtools.comparison
+﻿package devtools.comparison
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,12 +11,13 @@ class StrategyComparisonJudgeServiceTest {
     fun `buildUserPrompt includes criteria and response schema`() {
         val prompt = service.buildUserPrompt(
             StrategyComparisonJudgeInput(
-                scenarioName = "Сценарий",
+                comparisonName = "Сценарий",
                 prompts = listOf("p1"),
                 candidates = listOf(
                     StrategyJudgeCandidate(
                         strategyId = "no_compression",
                         strategyDisplayName = "Без сжатия",
+                        scenarioDescription = "Линейный сценарий.",
                         finalResponse = "Ответ"
                     )
                 )
@@ -42,3 +43,4 @@ class StrategyComparisonJudgeServiceTest {
         assertEquals("""{"summary":"ok","ranking":["no_compression"],"evaluations":[]}""", json)
     }
 }
+

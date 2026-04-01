@@ -1,4 +1,4 @@
-package agent.memory.summarizer
+﻿package agent.memory.strategy.summary
 
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
@@ -16,3 +16,5 @@ class SimpleConversationSummarizer : ConversationSummarizer {
             ChatRole.ASSISTANT -> "Ассистент"
         }
 }
+
+

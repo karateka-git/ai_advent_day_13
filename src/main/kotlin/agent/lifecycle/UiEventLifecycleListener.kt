@@ -1,4 +1,4 @@
-package agent.lifecycle
+﻿package agent.lifecycle
 
 import ui.UiEvent
 import ui.UiEventSink
@@ -33,3 +33,4 @@ class UiEventLifecycleListener(
         uiEventSink.emit(UiEvent.ContextCompressionFinished(stats))
     }
 }
+

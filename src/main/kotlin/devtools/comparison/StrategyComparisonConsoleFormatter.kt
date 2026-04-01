@@ -1,4 +1,4 @@
-package devtools.comparison
+﻿package devtools.comparison
 
 import java.nio.file.Path
 
@@ -24,17 +24,26 @@ object StrategyComparisonConsoleFormatter {
             appendLine("  Внутренние LLM-вызовы по шагам: сколько дополнительных обращений к модели стратегия делала внутри каждого шага помимо основного ответа.")
             appendLine("  Финальный ответ сохранён в JSON-отчёт: полный итоговый текст и детальные данные лежат в report.json.")
             appendLine()
-            appendLine("Важно:")
-            appendLine("  Для стратегии summary Provider prompt-токены могут быть заметно больше локальных, потому что сюда входят внутренние запросы на обновление summary.")
-            appendLine()
             report.executions.forEach { execution ->
                 appendLine("${execution.strategyId} (${execution.strategyDisplayName})")
+                appendLine("  Описание: ${execution.strategyDescription}")
+                execution.providerPromptTokensNote?.let { note ->
+                    appendLine("  Важно: $note")
+                }
                 appendLine("  Шагов: ${execution.steps.size}")
                 appendLine("  Локальные prompt-токены: ${execution.totalLocalPromptTokens ?: "н/д"}")
                 appendLine("  Provider prompt-токены: ${execution.totalProviderPromptTokens ?: "н/д"}")
                 appendLine("  Provider completion-токены: ${execution.totalProviderCompletionTokens ?: "н/д"}")
                 appendLine("  Provider total-токены: ${execution.totalProviderTokens ?: "н/д"}")
                 appendLine("  Внутренние LLM-вызовы по шагам: ${execution.steps.joinToString { it.internalModelCallCount.toString() }}")
+                if (execution.branchExecutions.isNotEmpty()) {
+                    appendLine("  Ветки:")
+                    execution.branchExecutions.forEach { branch ->
+                        appendLine("    ${branch.branchName} (checkpoint: ${branch.sourceCheckpointName})")
+                        appendLine("      Шагов: ${branch.steps.size}")
+                        appendLine("      Длина итогового ответа: ${branch.finalResponse.length} символов")
+                    }
+                }
                 appendLine("  Финальный ответ сохранён в JSON-отчёт.")
                 appendLine()
             }
@@ -66,3 +75,4 @@ object StrategyComparisonConsoleFormatter {
             appendLine("Judge payload включён в JSON-отчёт для следующего этапа.")
         }.trimEnd()
 }
+

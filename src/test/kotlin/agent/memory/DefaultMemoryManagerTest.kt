@@ -1,15 +1,21 @@
-package agent.memory
+﻿package agent.memory
 
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.ContextCompressionStats
-import agent.memory.MemoryStrategyType
+import agent.memory.core.DefaultMemoryManager
+import agent.memory.core.MemoryStrategy
+import agent.memory.strategy.BranchingMemoryStrategy
+import agent.memory.strategy.MemoryStrategyType
+import agent.memory.strategy.NoCompressionMemoryStrategy
+import agent.memory.strategy.SummaryCompressionMemoryStrategy
 import agent.memory.model.MemoryMetadata
 import agent.memory.model.MemoryState
-import agent.memory.summarizer.ConversationSummarizer
+import agent.memory.strategy.summary.ConversationSummarizer
 import agent.storage.JsonConversationStore
 import agent.storage.model.ConversationMemoryState
 import agent.storage.model.StoredMemoryMetadata
 import agent.storage.model.StoredMessage
+import agent.storage.model.StoredStrategyState
 import agent.storage.model.StoredSummary
 import java.nio.file.Files
 import kotlin.test.Test
@@ -194,9 +200,12 @@ class DefaultMemoryManagerTest {
                     StoredMessage(role = "assistant", content = "a1"),
                     StoredMessage(role = "user", content = "u2")
                 ),
-                summary = StoredSummary(
-                    content = "Сжатый фрагмент",
-                    coveredMessagesCount = 2
+                strategyState = StoredStrategyState(
+                    strategyType = "summary_compression",
+                    summary = StoredSummary(
+                        content = "Сжатый фрагмент",
+                        coveredMessagesCount = 2
+                    )
                 ),
                 metadata = StoredMemoryMetadata(
                     strategyId = "summary_compression",
@@ -221,6 +230,60 @@ class DefaultMemoryManagerTest {
             ),
             manager.currentConversation()
         )
+    }
+
+    @Test
+    fun `branching strategy keeps independent histories for different branches`() {
+        val tempDir = Files.createTempDirectory("memory-manager-test")
+        val store = JsonConversationStore(tempDir.resolve("conversation.json"))
+        val manager = DefaultMemoryManager(
+            languageModel = FakeLanguageModel(),
+            systemPrompt = "Системное сообщение",
+            conversationStore = store,
+            memoryStrategy = BranchingMemoryStrategy()
+        )
+
+        manager.appendUserMessage("main-u1")
+        manager.appendAssistantMessage("main-a1")
+
+        assertEquals(
+            "checkpoint-1",
+            manager.createCheckpoint().name
+        )
+        assertEquals("option-a", manager.createBranch("option-a").name)
+        assertEquals("option-b", manager.createBranch("option-b").name)
+
+        manager.switchBranch("option-a")
+        manager.appendUserMessage("a-u1")
+        manager.appendAssistantMessage("a-a1")
+        val optionAConversation = manager.currentConversation()
+
+        manager.switchBranch("option-b")
+        manager.appendUserMessage("b-u1")
+        manager.appendAssistantMessage("b-a1")
+        val optionBConversation = manager.currentConversation()
+
+        assertEquals(
+            listOf(
+                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
+                ChatMessage(role = ChatRole.USER, content = "main-u1"),
+                ChatMessage(role = ChatRole.ASSISTANT, content = "main-a1"),
+                ChatMessage(role = ChatRole.USER, content = "a-u1"),
+                ChatMessage(role = ChatRole.ASSISTANT, content = "a-a1")
+            ),
+            optionAConversation
+        )
+        assertEquals(
+            listOf(
+                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
+                ChatMessage(role = ChatRole.USER, content = "main-u1"),
+                ChatMessage(role = ChatRole.ASSISTANT, content = "main-a1"),
+                ChatMessage(role = ChatRole.USER, content = "b-u1"),
+                ChatMessage(role = ChatRole.ASSISTANT, content = "b-a1")
+            ),
+            optionBConversation
+        )
+        assertEquals("option-b", manager.branchStatus().activeBranchName)
     }
 }
 
@@ -275,3 +338,4 @@ private class FixedConversationSummarizer(
 ) : ConversationSummarizer {
     override fun summarize(messages: List<ChatMessage>): String = summary
 }
+

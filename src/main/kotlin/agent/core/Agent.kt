@@ -1,4 +1,4 @@
-package agent.core
+﻿package agent.core
 
 import agent.format.ResponseFormat
 import java.nio.file.Path
@@ -35,4 +35,25 @@ interface Agent<T> {
      * @param sourcePath путь к файлу с сохранённой историей диалога
      */
     fun replaceContextFromFile(sourcePath: Path)
+
+    /**
+     * Создаёт checkpoint из текущего активного состояния диалога.
+     */
+    fun createCheckpoint(name: String? = null): BranchCheckpointInfo
+
+    /**
+     * Создаёт новую ветку из последнего checkpoint.
+     */
+    fun createBranch(name: String): BranchInfo
+
+    /**
+     * Переключает активную ветку диалога.
+     */
+    fun switchBranch(name: String): BranchInfo
+
+    /**
+     * Возвращает текущее состояние ветвления диалога.
+     */
+    fun branchStatus(): BranchingStatus
 }
+

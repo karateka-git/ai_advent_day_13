@@ -61,6 +61,11 @@ tasks.register<JavaExec>("compareStrategies") {
     val comparisonJudge = project.findProperty("comparisonJudge")?.toString()?.takeIf { it.isNotBlank() }
         ?: defaultComparisonJudge
     systemProperty("comparison.judge", comparisonJudge)
+
+    project.findProperty("comparisonStrategies")
+        ?.toString()
+        ?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("comparison.strategies", it) }
 }
 
 tasks.test {

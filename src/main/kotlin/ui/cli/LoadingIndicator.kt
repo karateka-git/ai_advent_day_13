@@ -1,4 +1,4 @@
-package ui.cli
+﻿package ui.cli
 
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
@@ -70,3 +70,4 @@ class LoadingIndicator {
         print("\r${" ".repeat(60)}\r")
     }
 }
+

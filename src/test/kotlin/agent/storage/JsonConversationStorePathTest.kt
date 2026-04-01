@@ -1,4 +1,4 @@
-package agent.storage
+﻿package agent.storage
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -34,3 +34,4 @@ private class FakeLanguageModel(
     override fun complete(messages: List<ChatMessage>): LanguageModelResponse =
         error("Не должен вызываться в этом тесте.")
 }
+

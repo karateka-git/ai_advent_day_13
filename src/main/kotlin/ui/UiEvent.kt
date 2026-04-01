@@ -1,9 +1,12 @@
-package ui
+﻿package ui
 
 import agent.core.AgentInfo
 import agent.core.AgentTokenStats
+import agent.core.BranchCheckpointInfo
+import agent.core.BranchInfo
+import agent.core.BranchingStatus
 import agent.lifecycle.ContextCompressionStats
-import agent.memory.MemoryStrategyOption
+import agent.memory.strategy.MemoryStrategyOption
 import llm.core.model.ChatRole
 import llm.core.model.LanguageModelOption
 
@@ -60,6 +63,34 @@ sealed interface UiEvent {
     data class ModelsAvailable(
         val options: List<LanguageModelOption>,
         val currentModelId: String
+    ) : UiEvent
+
+    /**
+     * Создан новый checkpoint.
+     */
+    data class CheckpointCreated(
+        val info: BranchCheckpointInfo
+    ) : UiEvent
+
+    /**
+     * Создана новая ветка.
+     */
+    data class BranchCreated(
+        val info: BranchInfo
+    ) : UiEvent
+
+    /**
+     * Активная ветка переключена.
+     */
+    data class BranchSwitched(
+        val info: BranchInfo
+    ) : UiEvent
+
+    /**
+     * Нужно показать текущее состояние ветвления диалога.
+     */
+    data class BranchStatusAvailable(
+        val status: BranchingStatus
     ) : UiEvent
 
     /**
@@ -146,3 +177,4 @@ sealed interface UiEvent {
         val stats: ContextCompressionStats
     ) : UiEvent
 }
+

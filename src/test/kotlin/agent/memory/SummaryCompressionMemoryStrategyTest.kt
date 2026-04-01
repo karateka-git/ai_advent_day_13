@@ -1,10 +1,12 @@
-package agent.memory
+﻿package agent.memory
 
 import agent.memory.model.ConversationSummary
 import agent.memory.model.MemoryMetadata
 import agent.memory.model.MemoryState
 import agent.memory.model.SummaryStrategyState
-import agent.memory.summarizer.ConversationSummarizer
+import agent.memory.strategy.MemoryStrategyType
+import agent.memory.strategy.SummaryCompressionMemoryStrategy
+import agent.memory.strategy.summary.ConversationSummarizer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import llm.core.model.ChatMessage
@@ -224,3 +226,4 @@ private class FixedSummaryConversationSummarizer(
 ) : ConversationSummarizer {
     override fun summarize(messages: List<ChatMessage>): String = summary
 }
+

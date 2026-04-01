@@ -1,5 +1,6 @@
-package ui.cli
+﻿package ui.cli
 
+import agent.memory.strategy.MemoryStrategyOption
 import ui.UiEvent
 import ui.UiEventSink
 
@@ -34,6 +35,10 @@ class CliRenderer(
             is UiEvent.MemoryStrategySelected -> {
                 println("Выбрана стратегия: ${event.option.displayName}")
                 println("Как работает: ${event.option.description}")
+                printAdditionalCommands(
+                    event.option,
+                    header = "Дополнительные команды:"
+                )
             }
 
             UiEvent.MemoryStrategySelectionRejected -> {
@@ -46,6 +51,10 @@ class CliRenderer(
                 println("Модель: ${event.info.model}")
                 println("Стратегия памяти: ${event.strategy.displayName}")
                 println("Поведение стратегии: ${event.strategy.description}")
+                printAdditionalCommands(
+                    event.strategy,
+                    header = "Команды стратегии:"
+                )
             }
 
             is UiEvent.ModelsAvailable -> {
@@ -66,6 +75,30 @@ class CliRenderer(
                         }
                     }.trimEnd()
                 )
+            }
+
+            is UiEvent.CheckpointCreated -> {
+                println("Создан checkpoint: ${event.info.name}")
+                println("Исходная ветка: ${event.info.sourceBranchName}")
+            }
+
+            is UiEvent.BranchCreated -> {
+                println("Создана ветка: ${event.info.name}")
+                println("Источник: ${event.info.sourceCheckpointName ?: "без checkpoint"}")
+            }
+
+            is UiEvent.BranchSwitched -> {
+                println("Активная ветка: ${event.info.name}")
+            }
+
+            is UiEvent.BranchStatusAvailable -> {
+                println("Активная ветка: ${event.status.activeBranchName}")
+                println("Последний checkpoint: ${event.status.latestCheckpointName ?: "нет"}")
+                println("Ветки:")
+                event.status.branches.forEach { branch ->
+                    val marker = if (branch.isActive) "*" else " "
+                    println("$marker ${branch.name} (checkpoint: ${branch.sourceCheckpointName ?: "нет"})")
+                }
             }
 
             is UiEvent.UserInputPrompt -> {
@@ -120,4 +153,19 @@ class CliRenderer(
             }
         }
     }
+
+    private fun printAdditionalCommands(
+        option: MemoryStrategyOption,
+        header: String = "Дополнительные команды:"
+    ) {
+        if (option.additionalCommands.isEmpty()) {
+            return
+        }
+
+        println(header)
+        option.additionalCommands.forEach { command ->
+            println("- ${command.command} - ${command.description}")
+        }
+    }
 }
+

@@ -1,4 +1,4 @@
-package llm.huggingface.tokenizer
+﻿package llm.huggingface.tokenizer
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -30,3 +30,4 @@ object Qwen25TokenizerAssets {
         targetPath.toFile().deleteOnExit()
     }
 }
+

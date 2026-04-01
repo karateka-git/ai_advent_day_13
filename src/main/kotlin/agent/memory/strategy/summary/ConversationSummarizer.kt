@@ -1,4 +1,4 @@
-package agent.memory.summarizer
+﻿package agent.memory.strategy.summary
 
 import llm.core.model.ChatMessage
 
@@ -11,3 +11,5 @@ interface ConversationSummarizer {
      */
     fun summarize(messages: List<ChatMessage>): String
 }
+
+

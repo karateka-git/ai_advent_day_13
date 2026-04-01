@@ -1,8 +1,9 @@
-package agent.storage
+﻿package agent.storage
 
 import agent.storage.model.ConversationMemoryState
 import agent.storage.model.StoredMemoryMetadata
 import agent.storage.model.StoredMessage
+import agent.storage.model.StoredStrategyState
 import agent.storage.model.StoredSummary
 import java.nio.file.Files
 import kotlin.io.path.writeText
@@ -62,7 +63,7 @@ class JsonConversationStoreTest {
     }
 
     @Test
-    fun `saveState and loadState preserve summary and metadata`() {
+    fun `saveState and loadState preserve strategy state and metadata`() {
         val tempDir = Files.createTempDirectory("conversation-store-test")
         val store = JsonConversationStore(tempDir.resolve("conversation.json"))
         val state = ConversationMemoryState(
@@ -70,9 +71,12 @@ class JsonConversationStoreTest {
                 StoredMessage(role = "system", content = "Ты помощник."),
                 StoredMessage(role = "user", content = "Привет")
             ),
-            summary = StoredSummary(
-                content = "Пользователь поздоровался.",
-                coveredMessagesCount = 2
+            strategyState = StoredStrategyState(
+                strategyType = "summary_compression",
+                summary = StoredSummary(
+                    content = "Пользователь поздоровался.",
+                    coveredMessagesCount = 2
+                )
             ),
             metadata = StoredMemoryMetadata(strategyId = "no_compression")
         )
@@ -82,3 +86,4 @@ class JsonConversationStoreTest {
         assertEquals(state, store.loadState())
     }
 }
+

@@ -1,4 +1,4 @@
-package llm.huggingface.tokenizer
+﻿package llm.huggingface.tokenizer
 
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
 import llm.core.tokenizer.TokenCounter
@@ -19,3 +19,4 @@ class Qwen25LocalTokenCounter : TokenCounter {
         return localTokenizer
     }
 }
+

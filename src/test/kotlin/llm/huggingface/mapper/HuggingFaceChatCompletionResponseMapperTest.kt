@@ -1,4 +1,4 @@
-package llm.huggingface.mapper
+﻿package llm.huggingface.mapper
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,3 +37,4 @@ class HuggingFaceChatCompletionResponseMapperTest {
         assertEquals(15, mapped.usage?.totalTokens)
     }
 }
+

@@ -1,4 +1,4 @@
-package llm.core.model
+﻿package llm.core.model
 
 data class LanguageModelOption(
     val id: String,
@@ -6,3 +6,4 @@ data class LanguageModelOption(
     val isConfigured: Boolean,
     val unavailableReason: String? = null
 )
+

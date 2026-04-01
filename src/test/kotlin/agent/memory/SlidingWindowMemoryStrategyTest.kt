@@ -1,9 +1,11 @@
-package agent.memory
+﻿package agent.memory
 
 import agent.memory.model.ConversationSummary
 import agent.memory.model.MemoryMetadata
 import agent.memory.model.MemoryState
 import agent.memory.model.SummaryStrategyState
+import agent.memory.strategy.MemoryStrategyType
+import agent.memory.strategy.SlidingWindowMemoryStrategy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import llm.core.model.ChatMessage
@@ -65,3 +67,4 @@ class SlidingWindowMemoryStrategyTest {
         )
     }
 }
+

@@ -1,4 +1,4 @@
-package llm.huggingface.model
+﻿package llm.huggingface.model
 
 import kotlinx.serialization.Serializable
 import llm.core.model.ChatMessage
@@ -9,3 +9,4 @@ data class HuggingFaceChatCompletionRequest(
     val messages: List<ChatMessage>,
     val temperature: Double
 )
+

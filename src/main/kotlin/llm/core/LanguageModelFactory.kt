@@ -1,4 +1,4 @@
-package llm.core
+﻿package llm.core
 
 import java.net.http.HttpClient
 import java.util.Properties
@@ -91,3 +91,4 @@ private fun Properties.getRequired(key: String): String =
  */
 private fun Properties.hasValue(key: String): Boolean =
     !getProperty(key).isNullOrBlank()
+

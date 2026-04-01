@@ -1,4 +1,4 @@
-package llm.timeweb.tokenizer
+﻿package llm.timeweb.tokenizer
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -28,3 +28,4 @@ object DeepSeekTokenizerAssets {
         targetPath.toFile().deleteOnExit()
     }
 }
+

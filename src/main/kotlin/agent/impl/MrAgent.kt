@@ -1,18 +1,21 @@
-package agent.impl
+﻿package agent.impl
 
 import agent.core.Agent
 import agent.core.AgentInfo
 import agent.core.AgentResponse
 import agent.core.AgentTokenStats
+import agent.core.BranchCheckpointInfo
+import agent.core.BranchInfo
+import agent.core.BranchingStatus
 import agent.format.ResponseFormat
 import agent.format.TextResponseFormat
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.NoOpAgentLifecycleListener
-import agent.memory.DefaultMemoryManager
-import agent.memory.MemoryManager
-import agent.memory.MemoryStrategy
-import agent.memory.SummaryCompressionMemoryStrategy
-import agent.memory.summarizer.LlmConversationSummarizer
+import agent.memory.core.DefaultMemoryManager
+import agent.memory.core.MemoryManager
+import agent.memory.core.MemoryStrategy
+import agent.memory.strategy.SummaryCompressionMemoryStrategy
+import agent.memory.strategy.summary.LlmConversationSummarizer
 import java.nio.file.Path
 import llm.core.LanguageModel
 
@@ -82,6 +85,18 @@ class MrAgent(
         memoryManager.replaceContextFromFile(sourcePath)
     }
 
+    override fun createCheckpoint(name: String?): BranchCheckpointInfo =
+        memoryManager.createCheckpoint(name)
+
+    override fun createBranch(name: String): BranchInfo =
+        memoryManager.createBranch(name)
+
+    override fun switchBranch(name: String): BranchInfo =
+        memoryManager.switchBranch(name)
+
+    override fun branchStatus(): BranchingStatus =
+        memoryManager.branchStatus()
+
     companion object {
         /**
          * Собирает финальный системный prompt агента, добавляя инструкции по формату ответа.
@@ -93,3 +108,4 @@ class MrAgent(
             "Ты полезный ассистент. Отвечай кратко, если пользователь не просит подробнее."
     }
 }
+

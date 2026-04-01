@@ -1,4 +1,4 @@
-package llm.core.model
+﻿package llm.core.model
 
 import kotlinx.serialization.Serializable
 
@@ -7,3 +7,4 @@ data class ChatMessage(
     val role: ChatRole,
     val content: String
 )
+

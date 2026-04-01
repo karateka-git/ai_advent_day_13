@@ -1,4 +1,4 @@
-package devtools.comparison
+﻿package devtools.comparison
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -53,7 +53,7 @@ class StrategyComparisonJudgeService(
      */
     fun buildUserPrompt(judgeInput: StrategyComparisonJudgeInput): String =
         buildString {
-            appendLine("Сравни стратегии памяти по одному и тому же сценарию.")
+            appendLine("Сравни стратегии памяти по сценариям, указанным у каждого кандидата.")
             appendLine("Оцени каждую стратегию по критериям:")
             appendLine("- qualityScore: качество финального ответа")
             appendLine("- stabilityScore: не теряет ли стратегия важные детали и ограничения")
@@ -69,6 +69,14 @@ class StrategyComparisonJudgeService(
             appendLine(
                 """{"summary":"...","ranking":["strategy_id"],"evaluations":[{"strategyId":"...","qualityScore":1,"stabilityScore":1,"usabilityScore":1,"strengths":["..."],"weaknesses":["..."],"verdict":"..."}]}"""
             )
+            appendLine()
+            appendLine("Название сравнения:")
+            appendLine(judgeInput.comparisonName)
+            if (judgeInput.prompts.isNotEmpty()) {
+                appendLine()
+                appendLine("Общий линейный сценарий:")
+                appendLine(judgeInput.prompts.joinToString(separator = "\n") { "- $it" })
+            }
             appendLine()
             appendLine("Данные для оценки:")
             appendLine(json.encodeToString(StrategyComparisonJudgeInput.serializer(), judgeInput))
@@ -118,3 +126,4 @@ private data class JudgeEvaluationPayload(
     val weaknesses: List<String>,
     val verdict: String
 )
+

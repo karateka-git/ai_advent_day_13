@@ -1,17 +1,28 @@
-package agent.memory
+﻿package agent.memory.core
 
 import agent.core.AgentTokenStats
+import agent.core.BranchCheckpointInfo
+import agent.core.BranchInfo
+import agent.core.BranchingStatus
+import agent.memory.model.BranchCheckpointState
+import agent.memory.model.BranchConversationState
+import agent.memory.model.BranchingStrategyState
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.ContextCompressionStats
 import agent.lifecycle.NoOpAgentLifecycleListener
 import agent.memory.model.ConversationSummary
 import agent.memory.model.MemoryMetadata
 import agent.memory.model.MemoryState
+import agent.memory.model.StickyFactsStrategyState
 import agent.memory.model.StrategyState
 import agent.memory.model.SummaryStrategyState
+import agent.memory.strategy.MemoryStrategyType
+import agent.memory.strategy.NoCompressionMemoryStrategy
 import agent.storage.JsonConversationStore
 import agent.storage.mapper.ChatMessageConversationMapper
 import agent.storage.model.ConversationMemoryState
+import agent.storage.model.StoredBranchCheckpoint
+import agent.storage.model.StoredBranchConversation
 import agent.storage.model.StoredMemoryMetadata
 import agent.storage.model.StoredStrategyState
 import agent.storage.model.StoredSummary
@@ -63,9 +74,15 @@ class DefaultMemoryManager(
     }
 
     override fun appendAssistantMessage(content: String) {
-        memoryState = memoryState.copy(
+        val updatedState = memoryState.copy(
             messages = memoryState.messages + ChatMessage(role = ChatRole.ASSISTANT, content = content)
         )
+        memoryState =
+            if (memoryStrategy.type == MemoryStrategyType.BRANCHING) {
+                synchronizeStrategyId(memoryStrategy.refreshState(updatedState, MemoryStateRefreshMode.REGULAR))
+            } else {
+                updatedState
+            }
         saveState()
     }
 
@@ -84,9 +101,98 @@ class DefaultMemoryManager(
         }
 
         memoryState = synchronizeStrategyId(
-            memoryStrategy.refreshState(importedState)
+            memoryStrategy.refreshState(importedState, MemoryStateRefreshMode.REGULAR)
         )
         saveState()
+    }
+
+    override fun createCheckpoint(name: String?): BranchCheckpointInfo {
+        val branchingState = requireBranchingState()
+        val checkpointName = normalizeBranchingName(name)
+            ?: "checkpoint-${branchingState.checkpoints.size + 1}"
+        require(branchingState.checkpoints.none { it.name.equals(checkpointName, ignoreCase = true) }) {
+            "Checkpoint '$checkpointName' уже существует."
+        }
+
+        memoryState = memoryState.copy(
+            strategyState = branchingState.copy(
+                latestCheckpointName = checkpointName,
+                checkpoints = branchingState.checkpoints + BranchCheckpointState(
+                    name = checkpointName,
+                    messages = memoryState.messages
+                )
+            )
+        )
+        saveState()
+
+        return BranchCheckpointInfo(
+            name = checkpointName,
+            sourceBranchName = branchingState.activeBranchName
+        )
+    }
+
+    override fun createBranch(name: String): BranchInfo {
+        val branchingState = requireBranchingState()
+        val branchName = normalizeRequiredBranchingName(name, "ветки")
+        require(branchingState.branches.none { it.name.equals(branchName, ignoreCase = true) }) {
+            "Ветка '$branchName' уже существует."
+        }
+
+        val checkpointName = branchingState.latestCheckpointName
+            ?: error("Сначала создайте checkpoint командой checkpoint.")
+        val checkpoint = branchingState.checkpoints.firstOrNull { it.name == checkpointName }
+            ?: error("Последний checkpoint '$checkpointName' не найден.")
+
+        memoryState = memoryState.copy(
+            strategyState = branchingState.copy(
+                branches = branchingState.branches + BranchConversationState(
+                    name = branchName,
+                    sourceCheckpointName = checkpoint.name,
+                    messages = checkpoint.messages
+                )
+            )
+        )
+        saveState()
+
+        return BranchInfo(
+            name = branchName,
+            sourceCheckpointName = checkpoint.name,
+            isActive = false
+        )
+    }
+
+    override fun switchBranch(name: String): BranchInfo {
+        val branchingState = requireBranchingState()
+        val branchName = normalizeRequiredBranchingName(name, "ветки")
+        val branch = branchingState.branches.firstOrNull { it.name.equals(branchName, ignoreCase = true) }
+            ?: error("Ветка '$branchName' не найдена.")
+
+        memoryState = memoryState.copy(
+            messages = branch.messages,
+            strategyState = branchingState.copy(activeBranchName = branch.name)
+        )
+        saveState()
+
+        return BranchInfo(
+            name = branch.name,
+            sourceCheckpointName = branch.sourceCheckpointName,
+            isActive = true
+        )
+    }
+
+    override fun branchStatus(): BranchingStatus {
+        val branchingState = requireBranchingState()
+        return BranchingStatus(
+            activeBranchName = branchingState.activeBranchName,
+            latestCheckpointName = branchingState.latestCheckpointName,
+            branches = branchingState.branches.map { branch ->
+                BranchInfo(
+                    name = branch.name,
+                    sourceCheckpointName = branch.sourceCheckpointName,
+                    isActive = branch.name == branchingState.activeBranchName
+                )
+            }
+        )
     }
 
     /**
@@ -96,7 +202,7 @@ class DefaultMemoryManager(
         val savedState = conversationStore.loadState().toMemoryState()
         if (savedState.messages.isNotEmpty()) {
             return synchronizeStrategyId(
-                memoryStrategy.refreshState(savedState)
+                memoryStrategy.refreshState(savedState, MemoryStateRefreshMode.REGULAR)
             )
         }
 
@@ -153,7 +259,8 @@ class DefaultMemoryManager(
                 memoryState.copy(
                     messages = memoryState.messages + ChatMessage(role = ChatRole.USER, content = userPrompt)
                 ),
-                notifyCompression = false
+                notifyCompression = false,
+                mode = MemoryStateRefreshMode.PREVIEW
             )
         )
 
@@ -163,9 +270,10 @@ class DefaultMemoryManager(
      */
     private fun refreshState(
         state: MemoryState,
-        notifyCompression: Boolean
+        notifyCompression: Boolean,
+        mode: MemoryStateRefreshMode = MemoryStateRefreshMode.REGULAR
     ): MemoryState {
-        val refreshedState = synchronizeStrategyId(memoryStrategy.refreshState(state))
+        val refreshedState = synchronizeStrategyId(memoryStrategy.refreshState(state, mode))
         if (!notifyCompression || !compressionApplied(state, refreshedState)) {
             return refreshedState
         }
@@ -201,21 +309,40 @@ class DefaultMemoryManager(
         )
 
     /**
-     * Поддерживает чтение нового strategyState и legacy-поля summary.
+     * Преобразует strategy-specific persisted state в runtime-state.
      */
     private fun ConversationMemoryState.toRuntimeStrategyState(): StrategyState? {
         val storedStrategyState = strategyState
-        if (storedStrategyState != null) {
-            return when (storedStrategyState.strategyType?.let(MemoryStrategyType::fromId)) {
-                MemoryStrategyType.SUMMARY_COMPRESSION -> SummaryStrategyState(
-                    summary = storedStrategyState.summary?.toRuntimeSummary()
-                )
-                else -> null
-            }
+        if (storedStrategyState == null) {
+            return null
         }
 
-        return summary?.let { legacySummary ->
-            SummaryStrategyState(summary = legacySummary.toRuntimeSummary())
+        return when (storedStrategyState.strategyType?.let(MemoryStrategyType::fromId)) {
+            MemoryStrategyType.SUMMARY_COMPRESSION -> SummaryStrategyState(
+                summary = storedStrategyState.summary?.toRuntimeSummary()
+            )
+            MemoryStrategyType.STICKY_FACTS -> StickyFactsStrategyState(
+                facts = storedStrategyState.facts,
+                coveredMessagesCount = storedStrategyState.factsCoveredMessagesCount
+            )
+            MemoryStrategyType.BRANCHING -> BranchingStrategyState(
+                activeBranchName = storedStrategyState.activeBranchName ?: BranchingStrategyState.DEFAULT_BRANCH_NAME,
+                latestCheckpointName = storedStrategyState.latestCheckpointName,
+                checkpoints = storedStrategyState.checkpoints.map { checkpoint ->
+                    BranchCheckpointState(
+                        name = checkpoint.name,
+                        messages = checkpoint.messages.map(conversationMapper::fromStoredMessage)
+                    )
+                },
+                branches = storedStrategyState.branches.map { branch ->
+                    BranchConversationState(
+                        name = branch.name,
+                        sourceCheckpointName = branch.sourceCheckpointName,
+                        messages = branch.messages.map(conversationMapper::fromStoredMessage)
+                    )
+                }
+            )
+            else -> null
         }
     }
 
@@ -225,7 +352,6 @@ class DefaultMemoryManager(
     private fun MemoryState.toStoredState(): ConversationMemoryState =
         ConversationMemoryState(
             messages = messages.map(conversationMapper::toStoredMessage),
-            summary = (strategyState as? SummaryStrategyState)?.summary?.toStoredSummary(),
             strategyState = strategyState?.toStoredStrategyState(),
             metadata = StoredMemoryMetadata(
                 strategyId = metadata.strategyType?.id,
@@ -247,9 +373,50 @@ class DefaultMemoryManager(
 
     private fun StrategyState.toStoredStrategyState(): StoredStrategyState =
         when (this) {
+            is StickyFactsStrategyState -> StoredStrategyState(
+                strategyType = strategyType.id,
+                facts = facts,
+                factsCoveredMessagesCount = coveredMessagesCount
+            )
+            is BranchingStrategyState -> StoredStrategyState(
+                strategyType = strategyType.id,
+                activeBranchName = activeBranchName,
+                latestCheckpointName = latestCheckpointName,
+                checkpoints = checkpoints.map { checkpoint ->
+                    StoredBranchCheckpoint(
+                        name = checkpoint.name,
+                        messages = checkpoint.messages.map(conversationMapper::toStoredMessage)
+                    )
+                },
+                branches = branches.map { branch ->
+                    StoredBranchConversation(
+                        name = branch.name,
+                        sourceCheckpointName = branch.sourceCheckpointName,
+                        messages = branch.messages.map(conversationMapper::toStoredMessage)
+                    )
+                }
+            )
             is SummaryStrategyState -> StoredStrategyState(
                 strategyType = strategyType.id,
                 summary = summary?.toStoredSummary()
             )
         }
+
+    private fun requireBranchingState(): BranchingStrategyState {
+        require(memoryStrategy.type == MemoryStrategyType.BRANCHING) {
+            "Команды ветвления доступны только для стратегии Branching."
+        }
+
+        val branchingState = memoryState.strategyState as? BranchingStrategyState
+        return branchingState
+            ?: error("Состояние ветвления не инициализировано.")
+    }
+
+    private fun normalizeBranchingName(name: String?): String? =
+        name?.trim()?.takeIf { it.isNotEmpty() }
+
+    private fun normalizeRequiredBranchingName(name: String, entityName: String): String =
+        normalizeBranchingName(name) ?: error("Имя $entityName не может быть пустым.")
 }
+
+

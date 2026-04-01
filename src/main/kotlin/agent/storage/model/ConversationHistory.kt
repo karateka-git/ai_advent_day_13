@@ -1,4 +1,4 @@
-package agent.storage.model
+﻿package agent.storage.model
 
 import kotlinx.serialization.Serializable
 
@@ -6,3 +6,4 @@ import kotlinx.serialization.Serializable
 data class ConversationHistory(
     val messages: List<StoredMessage>
 )
+

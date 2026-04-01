@@ -1,4 +1,4 @@
-package llm.timeweb.model
+﻿package llm.timeweb.model
 
 import kotlinx.serialization.Serializable
 import llm.core.model.ChatMessage
@@ -9,3 +9,4 @@ data class ChatCompletionRequest(
     val messages: List<ChatMessage>,
     val temperature: Double
 )
+

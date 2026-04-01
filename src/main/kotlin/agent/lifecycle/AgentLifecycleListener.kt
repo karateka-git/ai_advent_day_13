@@ -1,4 +1,4 @@
-package agent.lifecycle
+﻿package agent.lifecycle
 
 /**
  * Коллбеки уровня приложения для долгих этапов жизненного цикла, видимых в CLI.
@@ -36,3 +36,4 @@ interface AgentLifecycleListener {
      */
     fun onContextCompressionFinished(stats: ContextCompressionStats)
 }
+

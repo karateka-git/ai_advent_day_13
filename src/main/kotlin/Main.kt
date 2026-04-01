@@ -1,10 +1,10 @@
-import agent.core.Agent
+﻿import agent.core.Agent
 import agent.impl.MrAgent
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.UiEventLifecycleListener
-import agent.memory.MemoryStrategyFactory
-import agent.memory.MemoryStrategyOption
-import agent.memory.MemoryStrategyType
+import agent.memory.strategy.MemoryStrategyFactory
+import agent.memory.strategy.MemoryStrategyOption
+import agent.memory.strategy.MemoryStrategyType
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.http.HttpClient
@@ -185,3 +185,4 @@ private fun loadConfig(): Properties {
         Files.newInputStream(configPath).use(::load)
     }
 }
+

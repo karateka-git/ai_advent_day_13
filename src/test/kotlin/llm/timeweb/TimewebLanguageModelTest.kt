@@ -1,4 +1,4 @@
-package llm.timeweb
+﻿package llm.timeweb
 
 import java.io.EOFException
 import java.net.CookieHandler
@@ -173,3 +173,4 @@ private fun insecureSslContext(): SSLContext {
         init(null, trustAll, SecureRandom())
     }
 }
+

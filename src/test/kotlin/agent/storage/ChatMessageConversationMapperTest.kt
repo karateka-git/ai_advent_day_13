@@ -1,4 +1,4 @@
-package agent.storage
+﻿package agent.storage
 
 import agent.storage.mapper.ChatMessageConversationMapper
 import agent.storage.model.StoredMessage
@@ -22,3 +22,4 @@ class ChatMessageConversationMapperTest {
         assertEquals("Привет!", message.content)
     }
 }
+

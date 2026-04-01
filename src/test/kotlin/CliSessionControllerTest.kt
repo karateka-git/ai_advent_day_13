@@ -1,13 +1,16 @@
-import agent.core.Agent
+﻿import agent.core.Agent
 import agent.core.AgentInfo
 import agent.core.AgentResponse
 import agent.core.AgentTokenStats
+import agent.core.BranchCheckpointInfo
+import agent.core.BranchInfo
+import agent.core.BranchingStatus
 import agent.format.ResponseFormat
 import agent.format.TextResponseFormat
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.NoOpAgentLifecycleListener
-import agent.memory.MemoryStrategyOption
-import agent.memory.MemoryStrategyType
+import agent.memory.strategy.MemoryStrategyOption
+import agent.memory.strategy.MemoryStrategyType
 import java.net.http.HttpClient
 import java.nio.file.Path
 import java.util.Properties
@@ -173,6 +176,115 @@ class CliSessionControllerTest {
     }
 
     @Test
+    fun `creates checkpoint through current agent`() {
+        val sink = RecordingUiEventSink()
+        val agent = FakeAgent(
+            model = "initial-model",
+            checkpointInfo = BranchCheckpointInfo(
+                name = "checkpoint-1",
+                sourceBranchName = "main"
+            )
+        )
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("checkpoint")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<UiEvent>(
+                UiEvent.CheckpointCreated(
+                    BranchCheckpointInfo(name = "checkpoint-1", sourceBranchName = "main")
+                )
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `shows branch status through current agent`() {
+        val sink = RecordingUiEventSink()
+        val status = BranchingStatus(
+            activeBranchName = "main",
+            latestCheckpointName = "checkpoint-1",
+            branches = listOf(
+                BranchInfo(name = "main", isActive = true),
+                BranchInfo(name = "option-a", sourceCheckpointName = "checkpoint-1")
+            )
+        )
+        val agent = FakeAgent(
+            model = "initial-model",
+            branchingStatus = status
+        )
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("branches")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<UiEvent>(UiEvent.BranchStatusAvailable(status)),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `creates branch through current agent`() {
+        val sink = RecordingUiEventSink()
+        val branchInfo = BranchInfo(
+            name = "option-a",
+            sourceCheckpointName = "checkpoint-1",
+            isActive = false
+        )
+        val agent = FakeAgent(
+            model = "initial-model",
+            createdBranchInfo = branchInfo
+        )
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("branch create option-a")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<UiEvent>(UiEvent.BranchCreated(branchInfo)),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `switches branch through current agent`() {
+        val sink = RecordingUiEventSink()
+        val branchInfo = BranchInfo(
+            name = "option-b",
+            sourceCheckpointName = "checkpoint-1",
+            isActive = true
+        )
+        val agent = FakeAgent(
+            model = "initial-model",
+            switchedBranchInfo = branchInfo
+        )
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("branch use option-b")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<UiEvent>(UiEvent.BranchSwitched(branchInfo)),
+            sink.events
+        )
+    }
+
+    @Test
     fun `handles regular prompt through current agent`() {
         val sink = RecordingUiEventSink()
         val agent = FakeAgent(
@@ -262,6 +374,25 @@ private class FakeAgent(
     private val response: AgentResponse<String> = AgentResponse(
         content = "ok",
         tokenStats = AgentTokenStats()
+    ),
+    private val checkpointInfo: BranchCheckpointInfo = BranchCheckpointInfo(
+        name = "checkpoint-1",
+        sourceBranchName = "main"
+    ),
+    private val createdBranchInfo: BranchInfo = BranchInfo(
+        name = "option-a",
+        sourceCheckpointName = "checkpoint-1",
+        isActive = false
+    ),
+    private val switchedBranchInfo: BranchInfo = BranchInfo(
+        name = "option-a",
+        sourceCheckpointName = "checkpoint-1",
+        isActive = true
+    ),
+    private val branchingStatus: BranchingStatus = BranchingStatus(
+        activeBranchName = "main",
+        latestCheckpointName = null,
+        branches = listOf(BranchInfo(name = "main", isActive = true))
     )
 ) : Agent<String> {
     override val info: AgentInfo = AgentInfo(
@@ -292,6 +423,18 @@ private class FakeAgent(
     override fun replaceContextFromFile(sourcePath: Path) {
         error("Не должен вызываться в этом тесте.")
     }
+
+    override fun createCheckpoint(name: String?): BranchCheckpointInfo =
+        checkpointInfo
+
+    override fun createBranch(name: String): BranchInfo =
+        createdBranchInfo
+
+    override fun switchBranch(name: String): BranchInfo =
+        switchedBranchInfo
+
+    override fun branchStatus(): BranchingStatus =
+        branchingStatus
 }
 
 private class FakeLanguageModel(
@@ -308,3 +451,4 @@ private class FakeLanguageModel(
     override fun complete(messages: List<ChatMessage>): LanguageModelResponse =
         error("Не должен вызываться в этом тесте.")
 }
+

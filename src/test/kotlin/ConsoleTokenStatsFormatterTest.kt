@@ -1,4 +1,4 @@
-import agent.core.AgentTokenStats
+﻿import agent.core.AgentTokenStats
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import llm.core.model.TokenUsage
@@ -59,3 +59,4 @@ class ConsoleTokenStatsFormatterTest {
     private fun String.normalizeLineSeparators(): String =
         replace("\r\n", "\n")
 }
+

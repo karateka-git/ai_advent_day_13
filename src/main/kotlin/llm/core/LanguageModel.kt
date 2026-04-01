@@ -1,4 +1,4 @@
-package llm.core
+﻿package llm.core
 
 import llm.core.model.ChatMessage
 import llm.core.model.LanguageModelInfo
@@ -24,3 +24,4 @@ interface LanguageModel {
      */
     fun complete(messages: List<ChatMessage>): LanguageModelResponse
 }
+

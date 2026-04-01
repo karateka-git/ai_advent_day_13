@@ -1,4 +1,4 @@
-package ui
+﻿package ui
 
 /**
  * Принимает UI-события, которые приложение хочет отобразить пользователю.
@@ -9,3 +9,4 @@ interface UiEventSink {
      */
     fun emit(event: UiEvent)
 }
+

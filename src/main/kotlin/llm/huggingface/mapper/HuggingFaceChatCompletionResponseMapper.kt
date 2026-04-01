@@ -1,4 +1,4 @@
-package llm.huggingface.mapper
+﻿package llm.huggingface.mapper
 
 import llm.core.model.LanguageModelResponse
 import llm.core.model.TokenUsage
@@ -22,3 +22,4 @@ class HuggingFaceChatCompletionResponseMapper {
         )
     }
 }
+

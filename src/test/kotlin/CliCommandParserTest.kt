@@ -1,4 +1,4 @@
-import kotlin.test.Test
+﻿import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CliCommandParserTest {
@@ -17,6 +17,28 @@ class CliCommandParserTest {
     @Test
     fun `parses models command`() {
         assertEquals(CliCommand.ShowModels, parser.parse("models"))
+    }
+
+    @Test
+    fun `parses checkpoint command with optional name`() {
+        assertEquals(CliCommand.CreateCheckpoint(null), parser.parse("checkpoint"))
+        assertEquals(
+            CliCommand.CreateCheckpoint("v1"),
+            parser.parse("checkpoint v1")
+        )
+    }
+
+    @Test
+    fun `parses branching commands`() {
+        assertEquals(CliCommand.ShowBranches, parser.parse("branches"))
+        assertEquals(
+            CliCommand.CreateBranch("option-a"),
+            parser.parse("branch create option-a")
+        )
+        assertEquals(
+            CliCommand.SwitchBranch("option-b"),
+            parser.parse("branch use option-b")
+        )
     }
 
     @Test
@@ -41,3 +63,4 @@ class CliCommandParserTest {
         )
     }
 }
+

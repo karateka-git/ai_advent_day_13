@@ -1,4 +1,4 @@
-package agent.storage.model
+﻿package agent.storage.model
 
 import kotlinx.serialization.Serializable
 
@@ -7,3 +7,4 @@ data class StoredMessage(
     val role: String,
     val content: String
 )
+

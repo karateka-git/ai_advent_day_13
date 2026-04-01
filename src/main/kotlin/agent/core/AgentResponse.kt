@@ -1,4 +1,4 @@
-package agent.core
+﻿package agent.core
 
 import llm.core.model.TokenUsage
 
@@ -19,3 +19,4 @@ data class AgentTokenStats(
     val userPromptTokens: Int? = null,
     val apiUsage: TokenUsage? = null
 )
+

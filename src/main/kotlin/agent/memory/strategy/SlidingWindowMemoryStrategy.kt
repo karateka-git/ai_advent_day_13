@@ -1,5 +1,6 @@
-package agent.memory
+﻿package agent.memory.strategy
 
+import agent.memory.core.MemoryStrategy
 import agent.memory.model.MemoryState
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
@@ -26,3 +27,5 @@ class SlidingWindowMemoryStrategy(
         return systemMessages + dialogMessages.takeLast(recentMessagesCount)
     }
 }
+
+

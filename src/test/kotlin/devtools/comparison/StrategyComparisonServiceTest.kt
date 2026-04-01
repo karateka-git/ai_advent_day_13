@@ -1,7 +1,7 @@
-package devtools.comparison
+﻿package devtools.comparison
 
-import agent.memory.MemoryStrategyOption
-import agent.memory.MemoryStrategyType
+import agent.memory.strategy.MemoryStrategyOption
+import agent.memory.strategy.MemoryStrategyType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -38,6 +38,7 @@ class StrategyComparisonServiceTest {
                     strategyId = option.id,
                     strategyDisplayName = option.displayName,
                     strategyDescription = option.description,
+                    providerPromptTokensNote = null,
                     steps = listOf(
                         StrategyComparisonStepReport(
                             stepNumber = 1,
@@ -64,3 +65,4 @@ class StrategyComparisonServiceTest {
         assertEquals(listOf("Ответ no_compression", "Ответ sliding_window"), report.judgeInput.candidates.map { it.finalResponse })
     }
 }
+

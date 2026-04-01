@@ -1,4 +1,4 @@
-package agent.lifecycle
+﻿package agent.lifecycle
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,3 +40,4 @@ private class RecordingUiEventSink : UiEventSink {
         events += event
     }
 }
+

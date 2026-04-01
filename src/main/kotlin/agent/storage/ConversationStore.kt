@@ -1,4 +1,4 @@
-package agent.storage
+﻿package agent.storage
 
 import agent.storage.model.StoredMessage
 import agent.storage.model.ConversationMemoryState
@@ -34,3 +34,4 @@ interface ConversationStore {
         saveState(ConversationMemoryState(messages = messages))
     }
 }
+

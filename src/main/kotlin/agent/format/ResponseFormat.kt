@@ -1,4 +1,4 @@
-package agent.format
+﻿package agent.format
 
 interface ResponseFormat<T> {
     val formatInstruction: String
@@ -11,3 +11,4 @@ interface ResponseFormat<T> {
      */
     fun parse(rawResponse: String): T
 }
+

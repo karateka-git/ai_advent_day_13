@@ -1,5 +1,6 @@
-package agent.memory
+﻿package agent.memory.strategy
 
+import agent.memory.core.MemoryStrategy
 import agent.memory.model.MemoryState
 import llm.core.model.ChatMessage
 
@@ -12,3 +13,5 @@ class NoCompressionMemoryStrategy : MemoryStrategy {
     override fun effectiveContext(state: MemoryState): List<ChatMessage> =
         state.messages.toList()
 }
+
+

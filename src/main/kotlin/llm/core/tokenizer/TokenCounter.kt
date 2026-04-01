@@ -1,4 +1,4 @@
-package llm.core.tokenizer
+﻿package llm.core.tokenizer
 
 import llm.core.model.ChatMessage
 
@@ -29,3 +29,4 @@ interface TokenCounter {
     fun countMessage(message: ChatMessage): Int =
         countText("${message.role.apiValue}\n${message.content}")
 }
+

@@ -1,4 +1,4 @@
-package agent.memory.summarizer
+﻿package agent.memory.strategy.summary
 
 import llm.core.LanguageModel
 import llm.core.model.ChatMessage
@@ -52,3 +52,5 @@ class LlmConversationSummarizer(
                 "Не выдумывай факты. Пиши кратко, по-русски, в виде связного summary без лишнего вступления."
     }
 }
+
+

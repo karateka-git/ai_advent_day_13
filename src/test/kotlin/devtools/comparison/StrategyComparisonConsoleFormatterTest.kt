@@ -1,4 +1,4 @@
-package devtools.comparison
+﻿package devtools.comparison
 
 import java.nio.file.Path
 import kotlin.test.Test
@@ -17,6 +17,9 @@ class StrategyComparisonConsoleFormatterTest {
                     strategyId = "summary_compression",
                     strategyDisplayName = "Сжатие через summary",
                     strategyDescription = "Описание",
+                    providerPromptTokensNote =
+                        "Provider prompt-токены включают не только основной запрос, " +
+                            "но и внутренние вызовы на обновление summary.",
                     steps = listOf(
                         StrategyComparisonStepReport(
                             stepNumber = 1,
@@ -26,8 +29,8 @@ class StrategyComparisonConsoleFormatterTest {
                             providerPromptTokens = 12,
                             providerCompletionTokens = 8,
                             providerTotalTokens = 20,
-                            modelCallCount = 1,
-                            internalModelCallCount = 0,
+                            modelCallCount = 2,
+                            internalModelCallCount = 1,
                             requestMessageCount = 2,
                             requestCharacterCount = 30,
                             requestRoles = listOf("SYSTEM", "USER")
@@ -36,12 +39,13 @@ class StrategyComparisonConsoleFormatterTest {
                 )
             ),
             judgeInput = StrategyComparisonJudgeInput(
-                scenarioName = "Сценарий",
+                comparisonName = "Сценарий",
                 prompts = listOf("p1"),
                 candidates = listOf(
                     StrategyJudgeCandidate(
                         strategyId = "summary_compression",
                         strategyDisplayName = "Сжатие через summary",
+                        scenarioDescription = "Линейный сценарий.",
                         finalResponse = "Ответ",
                         totalLocalPromptTokens = 10,
                         totalProviderTokens = 20
@@ -70,6 +74,13 @@ class StrategyComparisonConsoleFormatterTest {
 
         assertTrue(formatted.contains("Финальный вывод judge"))
         assertTrue(formatted.contains("--------------------------------------------------"))
+        assertTrue(formatted.contains("  Описание: Описание"))
+        assertTrue(
+            formatted.contains(
+                "  Важно: Provider prompt-токены включают не только основной запрос, " +
+                    "но и внутренние вызовы на обновление summary."
+            )
+        )
         assertTrue(formatted.contains("Общий итог:"))
         assertTrue(formatted.contains("Рейтинг:"))
         assertTrue(formatted.contains("Оценки:"))
@@ -82,3 +93,4 @@ class StrategyComparisonConsoleFormatterTest {
         )
     }
 }
+

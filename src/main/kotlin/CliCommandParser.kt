@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Разбирает строку пользовательского ввода в типизированную CLI-команду.
  */
 class CliCommandParser {
@@ -13,6 +13,16 @@ class CliCommandParser {
 
             input.equals(CliCommands.CLEAR, ignoreCase = true) -> CliCommand.Clear
             input.equals(CliCommands.MODELS, ignoreCase = true) -> CliCommand.ShowModels
+            input.equals(CliCommands.CHECKPOINT, ignoreCase = true) ->
+                CliCommand.CreateCheckpoint(null)
+            input.startsWith("${CliCommands.CHECKPOINT} ", ignoreCase = true) ->
+                CliCommand.CreateCheckpoint(input.substringAfter(' ').trim())
+            input.equals(CliCommands.BRANCHES, ignoreCase = true) ->
+                CliCommand.ShowBranches
+            input.startsWith("${CliCommands.BRANCH} create ", ignoreCase = true) ->
+                CliCommand.CreateBranch(input.substringAfter("${CliCommands.BRANCH} create ").trim())
+            input.startsWith("${CliCommands.BRANCH} use ", ignoreCase = true) ->
+                CliCommand.SwitchBranch(input.substringAfter("${CliCommands.BRANCH} use ").trim())
             input.startsWith("${CliCommands.USE} ", ignoreCase = true) ->
                 CliCommand.SwitchModel(input.substringAfter(' ').trim())
 
@@ -45,6 +55,32 @@ sealed interface CliCommand {
     data object ShowModels : CliCommand
 
     /**
+     * Создание checkpoint активной ветки.
+     */
+    data class CreateCheckpoint(
+        val name: String?
+    ) : CliCommand
+
+    /**
+     * Показ списка веток и активной ветки.
+     */
+    data object ShowBranches : CliCommand
+
+    /**
+     * Создание новой ветки из последнего checkpoint.
+     */
+    data class CreateBranch(
+        val name: String
+    ) : CliCommand
+
+    /**
+     * Переключение на существующую ветку.
+     */
+    data class SwitchBranch(
+        val name: String
+    ) : CliCommand
+
+    /**
      * Переключение модели по её CLI-идентификатору.
      */
     data class SwitchModel(
@@ -58,3 +94,4 @@ sealed interface CliCommand {
         val value: String
     ) : CliCommand
 }
+

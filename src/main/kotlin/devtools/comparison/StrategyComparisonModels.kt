@@ -1,4 +1,4 @@
-package devtools.comparison
+﻿package devtools.comparison
 
 import kotlinx.serialization.Serializable
 
@@ -12,6 +12,28 @@ import kotlinx.serialization.Serializable
 data class StrategyComparisonScenario(
     val name: String,
     val prompts: List<String>
+)
+
+/**
+ * Сценарий сравнения для стратегии Branching с общей частью и двумя независимыми ветками.
+ *
+ * @property name название сценария.
+ * @property sharedPrompts общая часть диалога до checkpoint.
+ * @property checkpointName имя checkpoint.
+ * @property firstBranchName имя первой ветки.
+ * @property firstBranchPrompts prompts первой ветки.
+ * @property secondBranchName имя второй ветки.
+ * @property secondBranchPrompts prompts второй ветки.
+ */
+@Serializable
+data class BranchingComparisonScenario(
+    val name: String,
+    val sharedPrompts: List<String>,
+    val checkpointName: String,
+    val firstBranchName: String,
+    val firstBranchPrompts: List<String>,
+    val secondBranchName: String,
+    val secondBranchPrompts: List<String>
 )
 
 /**
@@ -51,16 +73,35 @@ data class StrategyComparisonStepReport(
 )
 
 /**
+ * Результат одной отдельной ветки в branch-сценарии.
+ *
+ * @property branchName имя ветки.
+ * @property sourceCheckpointName checkpoint, из которого ветка была создана.
+ * @property steps шаги, выполненные в этой ветке.
+ * @property finalResponse финальный ответ по ветке.
+ */
+@Serializable
+data class BranchExecutionReport(
+    val branchName: String,
+    val sourceCheckpointName: String,
+    val steps: List<StrategyComparisonStepReport>,
+    val finalResponse: String = steps.lastOrNull()?.assistantResponse.orEmpty()
+)
+
+/**
  * Хранит агрегированный результат прогона сценария на одной стратегии памяти.
  *
  * @property strategyId стабильный идентификатор стратегии.
  * @property strategyDisplayName человекочитаемое имя стратегии.
  * @property strategyDescription описание стратегии для отчёта.
+ * @property providerPromptTokensNote пояснение, как интерпретировать provider prompt-токены
+ * для конкретной стратегии в этом execution.
  * @property steps детальные результаты по шагам сценария.
  * @property totalLocalPromptTokens суммарная локальная оценка prompt-токенов по всем шагам.
  * @property totalProviderPromptTokens суммарные prompt-токены по данным провайдера.
  * @property totalProviderCompletionTokens суммарные completion-токены по данным провайдера.
  * @property totalProviderTokens суммарные токены по данным провайдера.
+ * @property branchExecutions результаты по отдельным веткам, если стратегия поддерживает ветвление.
  * @property finalResponse финальный ответ стратегии на последнем шаге сценария.
  */
 @Serializable
@@ -68,12 +109,21 @@ data class StrategyExecutionReport(
     val strategyId: String,
     val strategyDisplayName: String,
     val strategyDescription: String,
+    val providerPromptTokensNote: String? = null,
     val steps: List<StrategyComparisonStepReport>,
     val totalLocalPromptTokens: Int? = sumNullable(steps.map { it.promptTokensLocal }),
     val totalProviderPromptTokens: Int? = sumNullable(steps.map { it.providerPromptTokens }),
     val totalProviderCompletionTokens: Int? = sumNullable(steps.map { it.providerCompletionTokens }),
     val totalProviderTokens: Int? = sumNullable(steps.map { it.providerTotalTokens }),
-    val finalResponse: String = steps.lastOrNull()?.assistantResponse.orEmpty()
+    val branchExecutions: List<BranchExecutionReport> = emptyList(),
+    val finalResponse: String =
+        if (branchExecutions.isNotEmpty()) {
+            branchExecutions.joinToString(separator = "\n\n") { branch ->
+                "Ветка ${branch.branchName}:\n${branch.finalResponse}"
+            }
+        } else {
+            steps.lastOrNull()?.assistantResponse.orEmpty()
+        }
 )
 
 /**
@@ -81,6 +131,7 @@ data class StrategyExecutionReport(
  *
  * @property strategyId идентификатор стратегии.
  * @property strategyDisplayName человекочитаемое имя стратегии.
+ * @property scenarioDescription описание сценария, в рамках которого оценивалась стратегия.
  * @property finalResponse финальный ответ стратегии на сценарий.
  * @property totalLocalPromptTokens суммарная локальная оценка prompt-токенов.
  * @property totalProviderTokens суммарные токены по данным провайдера.
@@ -89,6 +140,7 @@ data class StrategyExecutionReport(
 data class StrategyJudgeCandidate(
     val strategyId: String,
     val strategyDisplayName: String,
+    val scenarioDescription: String? = null,
     val finalResponse: String,
     val totalLocalPromptTokens: Int? = null,
     val totalProviderTokens: Int? = null
@@ -97,14 +149,14 @@ data class StrategyJudgeCandidate(
 /**
  * Подготавливает полезную нагрузку для отдельного judge-запроса в LLM.
  *
- * @property scenarioName название сценария сравнения.
- * @property prompts исходная последовательность пользовательских сообщений.
+ * @property comparisonName название общего сравнения стратегий.
+ * @property prompts legacy-последовательность prompts для линейного сценария, если она есть.
  * @property candidates стратегии-кандидаты для последующего судейства.
  */
 @Serializable
 data class StrategyComparisonJudgeInput(
-    val scenarioName: String,
-    val prompts: List<String>,
+    val comparisonName: String,
+    val prompts: List<String> = emptyList(),
     val candidates: List<StrategyJudgeCandidate>
 )
 
@@ -175,3 +227,4 @@ private fun sumNullable(values: List<Int?>): Int? {
     val presentValues = values.filterNotNull()
     return presentValues.takeIf { it.isNotEmpty() }?.sum()
 }
+

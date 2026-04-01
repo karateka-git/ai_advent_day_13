@@ -1,4 +1,4 @@
-package agent.lifecycle
+﻿package agent.lifecycle
 
 /**
  * Количество токенов, собранное до и после сжатия памяти.
@@ -18,3 +18,4 @@ data class ContextCompressionStats(
                 tokensBefore - tokensAfter
             }
 }
+

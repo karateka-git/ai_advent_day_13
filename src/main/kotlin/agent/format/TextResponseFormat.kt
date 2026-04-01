@@ -1,4 +1,4 @@
-package agent.format
+﻿package agent.format
 
 /**
  * Текстовый формат вывода, используемый в CLI.
@@ -9,3 +9,4 @@ object TextResponseFormat : ResponseFormat<String> {
 
     override fun parse(rawResponse: String): String = rawResponse
 }
+

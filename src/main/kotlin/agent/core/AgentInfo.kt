@@ -1,4 +1,4 @@
-package agent.core
+﻿package agent.core
 
 /**
  * Описывает текущую конфигурацию агента, которая показывается пользователю.
@@ -8,3 +8,4 @@ data class AgentInfo(
     val description: String,
     val model: String
 )
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Единое описание встроенных CLI-команд.
  */
 object CliCommands {
@@ -7,4 +7,8 @@ object CliCommands {
     const val CLEAR = "clear"
     const val MODELS = "models"
     const val USE = "use"
+    const val CHECKPOINT = "checkpoint"
+    const val BRANCH = "branch"
+    const val BRANCHES = "branches"
 }
+

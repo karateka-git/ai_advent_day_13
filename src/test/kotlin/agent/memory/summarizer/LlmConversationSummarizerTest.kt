@@ -1,5 +1,6 @@
-package agent.memory.summarizer
+﻿package agent.memory.summarizer
 
+import agent.memory.strategy.summary.LlmConversationSummarizer
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -57,3 +58,4 @@ private class RecordingLanguageModel(
         return LanguageModelResponse(content = responseContent)
     }
 }
+

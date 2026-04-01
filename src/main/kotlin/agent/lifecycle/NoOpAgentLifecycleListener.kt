@@ -1,4 +1,4 @@
-package agent.lifecycle
+﻿package agent.lifecycle
 
 /**
  * Реализация lifecycle-listener, которая игнорирует все коллбеки.
@@ -16,3 +16,4 @@ object NoOpAgentLifecycleListener : AgentLifecycleListener {
 
     override fun onContextCompressionFinished(stats: ContextCompressionStats) = Unit
 }
+

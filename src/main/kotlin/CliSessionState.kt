@@ -1,5 +1,5 @@
-import agent.core.Agent
-import agent.memory.MemoryStrategyOption
+﻿import agent.core.Agent
+import agent.memory.strategy.MemoryStrategyOption
 import llm.core.LanguageModel
 
 /**
@@ -13,3 +13,4 @@ data class CliSessionState(
     val agent: Agent<String>,
     val memoryStrategyOption: MemoryStrategyOption
 )
+

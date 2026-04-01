@@ -1,4 +1,4 @@
-package llm.timeweb.model
+﻿package llm.timeweb.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -24,3 +24,4 @@ data class Usage(
     @SerialName("total_tokens")
     val totalTokens: Int
 )
+

@@ -1,4 +1,4 @@
-package llm.huggingface.tokenizer
+﻿package llm.huggingface.tokenizer
 
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -13,3 +13,4 @@ class Qwen25LocalTokenCounterTest {
         assertTrue(tokenCount > 0)
     }
 }
+

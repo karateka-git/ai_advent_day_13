@@ -1,6 +1,7 @@
-package agent.memory
+﻿package agent.memory
 
 import agent.memory.model.MemoryState
+import agent.memory.strategy.NoCompressionMemoryStrategy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import llm.core.model.ChatMessage
@@ -20,3 +21,4 @@ class NoCompressionMemoryStrategyTest {
         assertEquals(messages, strategy.effectiveContext(MemoryState(messages = messages)))
     }
 }
+

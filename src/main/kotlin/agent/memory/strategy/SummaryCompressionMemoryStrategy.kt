@@ -1,9 +1,11 @@
-package agent.memory
+﻿package agent.memory.strategy
 
+import agent.memory.core.MemoryStateRefreshMode
+import agent.memory.core.MemoryStrategy
 import agent.memory.model.ConversationSummary
 import agent.memory.model.MemoryState
 import agent.memory.model.SummaryStrategyState
-import agent.memory.summarizer.ConversationSummarizer
+import agent.memory.strategy.summary.ConversationSummarizer
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
 
@@ -45,7 +47,10 @@ class SummaryCompressionMemoryStrategy(
         }
     }
 
-    override fun refreshState(state: MemoryState): MemoryState {
+    override fun refreshState(
+        state: MemoryState,
+        mode: MemoryStateRefreshMode
+    ): MemoryState {
         val preparedState = prepareStateForSummary(state)
         var currentState = preparedState
 
@@ -153,3 +158,5 @@ class SummaryCompressionMemoryStrategy(
             dropLast(count)
         }
 }
+
+

@@ -1,4 +1,4 @@
-package agent.memory.model
+﻿package agent.memory.model
 
 import llm.core.model.ChatMessage
 
@@ -10,3 +10,4 @@ data class MemoryState(
     val strategyState: StrategyState? = null,
     val metadata: MemoryMetadata = MemoryMetadata()
 )
+

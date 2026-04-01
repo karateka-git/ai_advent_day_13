@@ -1,11 +1,11 @@
-package devtools.comparison
+﻿package devtools.comparison
 
 import agent.format.TextResponseFormat
 import agent.impl.MrAgent
 import agent.lifecycle.NoOpAgentLifecycleListener
-import agent.memory.DefaultMemoryManager
-import agent.memory.MemoryStrategyFactory
-import agent.memory.MemoryStrategyOption
+import agent.memory.core.DefaultMemoryManager
+import agent.memory.strategy.MemoryStrategyFactory
+import agent.memory.strategy.MemoryStrategyOption
 import agent.storage.JsonConversationStore
 import java.nio.file.Files
 import java.nio.file.Path
@@ -81,6 +81,8 @@ class DefaultStrategyConversationExecutor(
             strategyId = option.id,
             strategyDisplayName = option.displayName,
             strategyDescription = option.description,
+            providerPromptTokensNote = option.specificPromptDescription
+                ?.takeIf { steps.any { step -> step.internalModelCallCount > 0 } },
             steps = steps
         )
     }
@@ -97,10 +99,11 @@ class DefaultStrategyConversationExecutor(
 /**
  * Суммирует указанную метрику usage по всем запросам шага, если провайдер вернул эти данные.
  */
-private fun sumUsage(
+internal fun sumUsage(
     requests: List<TracedModelRequest>,
     selector: (llm.core.model.TokenUsage) -> Int
 ): Int? {
     val usages = requests.mapNotNull { it.response.usage }
     return usages.takeIf { it.isNotEmpty() }?.sumOf(selector)
 }
+

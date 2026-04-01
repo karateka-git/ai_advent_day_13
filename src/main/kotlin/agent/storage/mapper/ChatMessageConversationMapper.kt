@@ -1,4 +1,4 @@
-package agent.storage.mapper
+﻿package agent.storage.mapper
 
 import agent.storage.model.StoredMessage
 import llm.core.model.ChatMessage
@@ -18,3 +18,4 @@ class ChatMessageConversationMapper : ConversationMapper {
             content = message.content
         )
 }
+
