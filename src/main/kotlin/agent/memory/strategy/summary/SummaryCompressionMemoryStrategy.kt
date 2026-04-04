@@ -32,14 +32,14 @@ class SummaryCompressionMemoryStrategy(
     override val type: MemoryStrategyType = MemoryStrategyType.SUMMARY_COMPRESSION
 
     override fun effectiveContext(state: MemoryState): List<ChatMessage> {
-        val systemMessages = state.messages.filter { it.role == ChatRole.SYSTEM }
-        val dialogMessages = state.messages.filter { it.role != ChatRole.SYSTEM }
+        val systemMessages = state.shortTerm.messages.filter { it.role == ChatRole.SYSTEM }
+        val dialogMessages = state.shortTerm.messages.filter { it.role != ChatRole.SYSTEM }
         val coveredMessagesCount = coveredMessagesCount(state)
         val uncompressedTail = dialogMessages.drop(coveredMessagesCount)
 
         val summary = summary(state)
         if (summary == null && coveredMessagesCount == 0) {
-            return state.messages.toList()
+            return state.shortTerm.messages.toList()
         }
 
         return buildList {
@@ -53,11 +53,16 @@ class SummaryCompressionMemoryStrategy(
         state: MemoryState,
         mode: MemoryStateRefreshMode
     ): MemoryState {
+        if (mode == MemoryStateRefreshMode.PREVIEW) {
+            // Preview token estimation must stay local and must not trigger summarizer side effects.
+            return state
+        }
+
         val preparedState = prepareStateForSummary(state)
         var currentState = preparedState
 
         while (true) {
-            val dialogMessages = currentState.messages.filter { it.role != ChatRole.SYSTEM }
+            val dialogMessages = currentState.shortTerm.messages.filter { it.role != ChatRole.SYSTEM }
             val uncompressedMessages = dialogMessages.drop(coveredMessagesCount(currentState))
             val messagesEligibleForCompression = uncompressedMessages.dropLastSafe(recentMessagesCount)
 
@@ -70,12 +75,14 @@ class SummaryCompressionMemoryStrategy(
             val summaryContent = buildUpdatedSummary(summary(currentState), nextBatch)
 
             currentState = currentState.copy(
-                strategyState = SummaryStrategyState(
-                    summary = ConversationSummary(
-                        content = summaryContent,
+                shortTerm = currentState.shortTerm.copy(
+                    strategyState = SummaryStrategyState(
+                        summary = ConversationSummary(
+                            content = summaryContent,
+                            coveredMessagesCount = updatedCoveredMessagesCount
+                        ),
                         coveredMessagesCount = updatedCoveredMessagesCount
-                    ),
-                    coveredMessagesCount = updatedCoveredMessagesCount
+                    )
                 )
             )
         }
@@ -90,13 +97,15 @@ class SummaryCompressionMemoryStrategy(
             return state
         }
 
-        val dialogMessages = state.messages.filter { it.role != ChatRole.SYSTEM }
+        val dialogMessages = state.shortTerm.messages.filter { it.role != ChatRole.SYSTEM }
         val activationWindowSize = recentMessagesCount + summaryBatchSize
         val coveredMessagesCount = (dialogMessages.size - activationWindowSize).coerceAtLeast(0)
 
         return state.copy(
-            strategyState = SummaryStrategyState(
-                coveredMessagesCount = coveredMessagesCount
+            shortTerm = state.shortTerm.copy(
+                strategyState = SummaryStrategyState(
+                    coveredMessagesCount = coveredMessagesCount
+                )
             )
         )
     }
@@ -117,7 +126,7 @@ class SummaryCompressionMemoryStrategy(
         summaryState(state)?.summary
 
     private fun summaryState(state: MemoryState): SummaryStrategyState? =
-        (state.strategyState as? SummaryStrategyState)
+        (state.shortTerm.strategyState as? SummaryStrategyState)
             ?.takeIf { it.strategyType == type }
 
     /**

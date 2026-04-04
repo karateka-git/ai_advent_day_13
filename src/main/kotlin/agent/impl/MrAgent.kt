@@ -12,6 +12,7 @@ import agent.lifecycle.NoOpAgentLifecycleListener
 import agent.memory.core.DefaultMemoryManager
 import agent.memory.core.MemoryManager
 import agent.memory.core.MemoryStrategy
+import agent.memory.model.MemorySnapshot
 import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
 import agent.memory.strategy.summary.LlmConversationSummarizer
 import java.nio.file.Path
@@ -82,6 +83,8 @@ class MrAgent(
     override fun replaceContextFromFile(sourcePath: Path) {
         memoryManager.replaceContextFromFile(sourcePath)
     }
+
+    override fun inspectMemory(): MemorySnapshot = memoryManager.memorySnapshot()
 
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? =
         memoryManager.capability(capabilityType)

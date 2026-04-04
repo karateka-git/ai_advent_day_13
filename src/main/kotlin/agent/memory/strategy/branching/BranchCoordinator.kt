@@ -27,11 +27,13 @@ class BranchCoordinator {
         }
 
         val updatedState = state.copy(
-            strategyState = branchingState.copy(
-                latestCheckpointName = checkpointName,
-                checkpoints = branchingState.checkpoints + BranchCheckpointState(
-                    name = checkpointName,
-                    messages = state.messages
+            shortTerm = state.shortTerm.copy(
+                strategyState = branchingState.copy(
+                    latestCheckpointName = checkpointName,
+                    checkpoints = branchingState.checkpoints + BranchCheckpointState(
+                        name = checkpointName,
+                        messages = state.shortTerm.messages
+                    )
                 )
             )
         )
@@ -64,11 +66,13 @@ class BranchCoordinator {
             ?: error("Последний checkpoint '$checkpointName' не найден.")
 
         val updatedState = state.copy(
-            strategyState = branchingState.copy(
-                branches = branchingState.branches + BranchConversationState(
-                    name = branchName,
-                    sourceCheckpointName = checkpoint.name,
-                    messages = checkpoint.messages
+            shortTerm = state.shortTerm.copy(
+                strategyState = branchingState.copy(
+                    branches = branchingState.branches + BranchConversationState(
+                        name = branchName,
+                        sourceCheckpointName = checkpoint.name,
+                        messages = checkpoint.messages
+                    )
                 )
             )
         )
@@ -96,8 +100,10 @@ class BranchCoordinator {
             ?: error("Ветка '$branchName' не найдена.")
 
         val updatedState = state.copy(
-            messages = branch.messages,
-            strategyState = branchingState.copy(activeBranchName = branch.name)
+            shortTerm = state.shortTerm.copy(
+                messages = branch.messages,
+                strategyState = branchingState.copy(activeBranchName = branch.name)
+            )
         )
 
         return BranchSwitchResult(
@@ -129,7 +135,7 @@ class BranchCoordinator {
     }
 
     private fun requireBranchingState(state: MemoryState): BranchingStrategyState {
-        val branchingState = state.strategyState as? BranchingStrategyState
+        val branchingState = state.shortTerm.strategyState as? BranchingStrategyState
         return branchingState
             ?: error("Состояние ветвления не инициализировано.")
     }

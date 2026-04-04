@@ -1,8 +1,12 @@
-﻿package ui.cli
+package ui.cli
 
+import agent.memory.model.MemoryLayer
+import agent.memory.model.MemorySnapshot
+import agent.memory.model.MemoryState
+import agent.memory.strategy.MemoryStrategyOption
 import app.output.AppEvent
 import app.output.AppEventSink
-import agent.memory.strategy.MemoryStrategyOption
+import llm.core.model.ChatMessage
 
 /**
  * CLI-реализация presentation-слоя, которая отвечает за весь пользовательский вывод.
@@ -74,6 +78,13 @@ class CliRenderer(
                             appendLine()
                         }
                     }.trimEnd()
+                )
+            }
+
+            is AppEvent.MemoryStateAvailable -> {
+                renderMemoryState(
+                    snapshot = event.snapshot,
+                    selectedLayer = event.selectedLayer
                 )
             }
 
@@ -154,6 +165,69 @@ class CliRenderer(
         }
     }
 
+    private fun renderMemoryState(snapshot: MemorySnapshot, selectedLayer: MemoryLayer?) {
+        memoryLayers(selectedLayer).forEach { layer ->
+            println("Уровень памяти: ${layerTitle(layer)}")
+            val lines = linesForLayer(snapshot, layer)
+            if (lines.isEmpty()) {
+                println("(пусто)")
+            } else {
+                lines.forEach { line -> println("- $line") }
+            }
+        }
+    }
+
+    private fun memoryLayers(selectedLayer: MemoryLayer?): List<MemoryLayer> =
+        selectedLayer?.let(::listOf)
+            ?: listOf(MemoryLayer.SHORT_TERM, MemoryLayer.WORKING, MemoryLayer.LONG_TERM)
+
+    private fun layerTitle(layer: MemoryLayer): String =
+        when (layer) {
+            MemoryLayer.SHORT_TERM -> "краткосрочная"
+            MemoryLayer.WORKING -> "рабочая"
+            MemoryLayer.LONG_TERM -> "долговременная"
+        }
+
+    private fun linesForLayer(snapshot: MemorySnapshot, layer: MemoryLayer): List<String> =
+        when (layer) {
+            MemoryLayer.SHORT_TERM -> buildShortTermLines(snapshot)
+            MemoryLayer.WORKING -> snapshot.state.working.notes.map { "${noteCategoryTitle(it.category)}: ${it.content}" }
+            MemoryLayer.LONG_TERM -> snapshot.state.longTerm.notes.map { "${noteCategoryTitle(it.category)}: ${it.content}" }
+        }
+
+    private fun buildShortTermLines(snapshot: MemorySnapshot): List<String> {
+        val strategyLine = "стратегия: ${snapshot.shortTermStrategyType.id}"
+        val strategyStateLine = snapshot.state.shortTerm.strategyState?.let { "состояние стратегии: ${it.strategyType.id}" }
+        val messages = snapshot.state.shortTerm.messages.map(::formatMessageLine)
+        return listOfNotNull(strategyLine, strategyStateLine) + messages
+    }
+
+    private fun formatMessageLine(message: ChatMessage): String =
+        "${messageRoleTitle(message)}: ${message.content}"
+
+    private fun messageRoleTitle(message: ChatMessage): String =
+        when (message.role) {
+            llm.core.model.ChatRole.SYSTEM -> "система"
+            llm.core.model.ChatRole.USER -> "пользователь"
+            llm.core.model.ChatRole.ASSISTANT -> "ассистент"
+        }
+
+    private fun noteCategoryTitle(category: String): String =
+        when (category) {
+            "goal" -> "цель"
+            "constraint" -> "ограничение"
+            "deadline" -> "срок"
+            "budget" -> "бюджет"
+            "integration" -> "интеграция"
+            "decision" -> "решение"
+            "open_question" -> "открытый вопрос"
+            "communication_style" -> "стиль общения"
+            "persistent_preference" -> "постоянное предпочтение"
+            "architectural_agreement" -> "архитектурная договорённость"
+            "reusable_knowledge" -> "повторно полезное знание"
+            else -> category
+        }
+
     private fun printAdditionalCommands(
         option: MemoryStrategyOption,
         header: String = "Дополнительные команды:"
@@ -168,4 +242,3 @@ class CliRenderer(
         }
     }
 }
-

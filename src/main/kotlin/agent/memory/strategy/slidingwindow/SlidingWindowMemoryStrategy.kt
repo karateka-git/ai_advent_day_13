@@ -24,8 +24,8 @@ class SlidingWindowMemoryStrategy(
     override val type: MemoryStrategyType = MemoryStrategyType.SLIDING_WINDOW
 
     override fun effectiveContext(state: MemoryState): List<ChatMessage> {
-        val systemMessages = state.messages.filter { it.role == ChatRole.SYSTEM }
-        val dialogMessages = state.messages.filter { it.role != ChatRole.SYSTEM }
+        val systemMessages = state.shortTerm.messages.filter { it.role == ChatRole.SYSTEM }
+        val dialogMessages = state.shortTerm.messages.filter { it.role != ChatRole.SYSTEM }
 
         return systemMessages + dialogMessages.takeLast(recentMessagesCount)
     }

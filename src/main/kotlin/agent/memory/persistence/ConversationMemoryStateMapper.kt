@@ -1,8 +1,16 @@
 package agent.memory.persistence
 
 import agent.memory.model.MemoryState
+import agent.memory.model.MemoryNote
+import agent.memory.model.LongTermMemory
+import agent.memory.model.ShortTermMemory
+import agent.memory.model.WorkingMemory
 import agent.storage.mapper.ChatMessageConversationMapper
 import agent.storage.model.ConversationMemoryState
+import agent.storage.model.StoredLongTermMemory
+import agent.storage.model.StoredMemoryNote
+import agent.storage.model.StoredShortTermMemory
+import agent.storage.model.StoredWorkingMemory
 
 /**
  * Преобразует полное runtime-состояние памяти в persisted JSON-модель и обратно.
@@ -16,8 +24,16 @@ class ConversationMemoryStateMapper(
      */
     fun toRuntime(storedState: ConversationMemoryState): MemoryState =
         MemoryState(
-            messages = storedState.messages.map(conversationMapper::fromStoredMessage),
-            strategyState = strategyStateMapper.toRuntime(storedState.strategyState)
+            shortTerm = ShortTermMemory(
+                messages = storedState.shortTerm.messages.map(conversationMapper::fromStoredMessage),
+                strategyState = strategyStateMapper.toRuntime(storedState.shortTerm.strategyState)
+            ),
+            working = WorkingMemory(
+                notes = storedState.working.notes.map(::toRuntimeNote)
+            ),
+            longTerm = LongTermMemory(
+                notes = storedState.longTerm.notes.map(::toRuntimeNote)
+            )
         )
 
     /**
@@ -25,7 +41,27 @@ class ConversationMemoryStateMapper(
      */
     fun toStored(runtimeState: MemoryState): ConversationMemoryState =
         ConversationMemoryState(
-            messages = runtimeState.messages.map(conversationMapper::toStoredMessage),
-            strategyState = strategyStateMapper.toStored(runtimeState.strategyState)
+            shortTerm = StoredShortTermMemory(
+                messages = runtimeState.shortTerm.messages.map(conversationMapper::toStoredMessage),
+                strategyState = strategyStateMapper.toStored(runtimeState.shortTerm.strategyState)
+            ),
+            working = StoredWorkingMemory(
+                notes = runtimeState.working.notes.map(::toStoredNote)
+            ),
+            longTerm = StoredLongTermMemory(
+                notes = runtimeState.longTerm.notes.map(::toStoredNote)
+            )
+        )
+
+    private fun toRuntimeNote(note: StoredMemoryNote): MemoryNote =
+        MemoryNote(
+            category = note.category,
+            content = note.content
+        )
+
+    private fun toStoredNote(note: MemoryNote): StoredMemoryNote =
+        StoredMemoryNote(
+            category = note.category,
+            content = note.content
         )
 }

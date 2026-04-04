@@ -1,21 +1,24 @@
-﻿package agent.memory
+package agent.memory
 
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.ContextCompressionStats
 import agent.memory.core.DefaultMemoryManager
 import agent.memory.core.MemoryStrategy
+import agent.memory.model.MemoryNote
+import agent.memory.model.MemoryState
+import agent.memory.persistence.JsonMemoryStateRepository
+import agent.memory.strategy.MemoryStrategyType
 import agent.memory.strategy.branching.BranchingCapability
 import agent.memory.strategy.branching.BranchingMemoryStrategy
-import agent.memory.strategy.MemoryStrategyType
 import agent.memory.strategy.nocompression.NoCompressionMemoryStrategy
-import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
-import agent.memory.model.MemoryState
 import agent.memory.strategy.summary.ConversationSummarizer
+import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
 import agent.storage.JsonConversationStore
 import agent.storage.model.ConversationMemoryState
 import agent.storage.model.StoredMessage
-import agent.storage.model.StoredSummaryStrategyState
+import agent.storage.model.StoredShortTermMemory
 import agent.storage.model.StoredSummary
+import agent.storage.model.StoredSummaryStrategyState
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,7 +39,7 @@ class DefaultMemoryManagerTest {
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
             systemPrompt = "Системное сообщение",
-            conversationStore = store
+            memoryStateRepository = JsonMemoryStateRepository(store)
         )
 
         assertEquals(
@@ -52,7 +55,7 @@ class DefaultMemoryManagerTest {
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
             systemPrompt = "Системное сообщение",
-            conversationStore = store
+            memoryStateRepository = JsonMemoryStateRepository(store)
         )
 
         val conversation = manager.appendUserMessage("Привет")
@@ -62,35 +65,48 @@ class DefaultMemoryManagerTest {
                 ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
                 ChatMessage(role = ChatRole.USER, content = "Привет")
             ),
+            manager.currentConversation()
+        )
+        assertEquals(
+            listOf(
+                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
+                ChatMessage(role = ChatRole.USER, content = "Привет")
+            ),
             conversation
         )
         assertEquals(
-            conversation,
+            manager.currentConversation(),
             DefaultMemoryManager(
                 languageModel = FakeLanguageModel(),
                 systemPrompt = "Системное сообщение",
-                conversationStore = store
+                memoryStateRepository = JsonMemoryStateRepository(store)
             ).currentConversation()
         )
     }
 
     @Test
-    fun `clear keeps only system message`() {
+    fun `clear resets short-term and working memory but keeps long-term memory`() {
         val tempDir = Files.createTempDirectory("memory-manager-test")
         val store = JsonConversationStore(tempDir.resolve("conversation.json"))
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
             systemPrompt = "Системное сообщение",
-            conversationStore = store
+            memoryStateRepository = JsonMemoryStateRepository(store)
         )
 
-        manager.appendUserMessage("Привет")
+        manager.appendUserMessage("Цель задачи - сделать MVP")
+        manager.appendUserMessage("Отвечай кратко")
         manager.appendAssistantMessage("Здравствуйте")
         manager.clear()
 
         assertEquals(
             listOf(ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение")),
             manager.currentConversation()
+        )
+        assertEquals(emptyList(), manager.memoryState().working.notes)
+        assertEquals(
+            listOf(MemoryNote(category = "communication_style", content = "Отвечай кратко")),
+            manager.memoryState().longTerm.notes
         )
     }
 
@@ -101,14 +117,17 @@ class DefaultMemoryManagerTest {
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
             systemPrompt = "Системное сообщение",
-            conversationStore = store,
+            memoryStateRepository = JsonMemoryStateRepository(store),
             memoryStrategy = LastMessageOnlyStrategy()
         )
 
         val conversation = manager.appendUserMessage("Привет")
 
         assertEquals(
-            listOf(ChatMessage(role = ChatRole.USER, content = "Привет")),
+            listOf(
+                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
+                ChatMessage(role = ChatRole.USER, content = "Привет")
+            ),
             conversation
         )
         assertEquals(
@@ -128,7 +147,7 @@ class DefaultMemoryManagerTest {
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(tokenCounter = CharacterTokenCounter()),
             systemPrompt = "Системное сообщение",
-            conversationStore = store,
+            memoryStateRepository = JsonMemoryStateRepository(store),
             memoryStrategy = SummaryCompressionMemoryStrategy(
                 recentMessagesCount = 2,
                 summaryBatchSize = 2,
@@ -142,19 +161,19 @@ class DefaultMemoryManagerTest {
         manager.appendUserMessage("u2")
         manager.appendAssistantMessage("a2")
 
+        val effectiveContext = manager.appendUserMessage("u3")
+
         assertEquals(
             listOf(
                 ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
                 ChatMessage(role = ChatRole.USER, content = "u1"),
                 ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
                 ChatMessage(role = ChatRole.USER, content = "u2"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a2")
+                ChatMessage(role = ChatRole.ASSISTANT, content = "a2"),
+                ChatMessage(role = ChatRole.USER, content = "u3")
             ),
             manager.currentConversation()
         )
-
-        val effectiveContext = manager.appendUserMessage("u3")
-
         assertEquals(
             listOf(
                 ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
@@ -167,17 +186,6 @@ class DefaultMemoryManagerTest {
                 ChatMessage(role = ChatRole.USER, content = "u3")
             ),
             effectiveContext
-        )
-        assertEquals(
-            listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
-                ChatMessage(role = ChatRole.USER, content = "u1"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
-                ChatMessage(role = ChatRole.USER, content = "u2"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a2"),
-                ChatMessage(role = ChatRole.USER, content = "u3")
-            ),
-            manager.currentConversation()
         )
         assertEquals(1, lifecycleListener.contextCompressionStartedCount)
         val stats = assertNotNull(lifecycleListener.lastContextCompressionStats)
@@ -193,18 +201,20 @@ class DefaultMemoryManagerTest {
         val store = JsonConversationStore(tempDir.resolve("conversation.json"))
         store.saveState(
             ConversationMemoryState(
-                messages = listOf(
-                    StoredMessage(role = "system", content = "Системное сообщение"),
-                    StoredMessage(role = "user", content = "u1"),
-                    StoredMessage(role = "assistant", content = "a1"),
-                    StoredMessage(role = "user", content = "u2")
-                ),
-                strategyState = StoredSummaryStrategyState(
-                    summary = StoredSummary(
-                        content = "Сжатый фрагмент",
-                        coveredMessagesCount = 2
+                shortTerm = StoredShortTermMemory(
+                    messages = listOf(
+                        StoredMessage(role = "system", content = "Системное сообщение"),
+                        StoredMessage(role = "user", content = "u1"),
+                        StoredMessage(role = "assistant", content = "a1"),
+                        StoredMessage(role = "user", content = "u2")
                     ),
-                    coveredMessagesCount = 2
+                    strategyState = StoredSummaryStrategyState(
+                        summary = StoredSummary(
+                            content = "Сжатый фрагмент",
+                            coveredMessagesCount = 2
+                        ),
+                        coveredMessagesCount = 2
+                    )
                 )
             )
         )
@@ -212,7 +222,7 @@ class DefaultMemoryManagerTest {
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
             systemPrompt = "Системное сообщение",
-            conversationStore = store,
+            memoryStateRepository = JsonMemoryStateRepository(store),
             memoryStrategy = NoCompressionMemoryStrategy()
         )
 
@@ -228,13 +238,47 @@ class DefaultMemoryManagerTest {
     }
 
     @Test
+    fun `memoryState returns layered snapshot`() {
+        val tempDir = Files.createTempDirectory("memory-manager-test")
+        val store = JsonConversationStore(tempDir.resolve("conversation.json"))
+        val manager = DefaultMemoryManager(
+            languageModel = FakeLanguageModel(),
+            systemPrompt = "Системное сообщение",
+            memoryStateRepository = JsonMemoryStateRepository(store)
+        )
+
+        manager.appendUserMessage("Отвечай кратко")
+
+        assertEquals(
+            listOf(MemoryNote(category = "communication_style", content = "Отвечай кратко")),
+            manager.memoryState().longTerm.notes
+        )
+    }
+
+    @Test
+    fun `assistant messages are not persisted into durable memory layers by default`() {
+        val tempDir = Files.createTempDirectory("memory-manager-test")
+        val store = JsonConversationStore(tempDir.resolve("conversation.json"))
+        val manager = DefaultMemoryManager(
+            languageModel = FakeLanguageModel(),
+            systemPrompt = "Системное сообщение",
+            memoryStateRepository = JsonMemoryStateRepository(store)
+        )
+
+        manager.appendAssistantMessage("Решили использовать telegram API")
+
+        assertEquals(emptyList(), manager.memoryState().working.notes)
+        assertEquals(emptyList(), manager.memoryState().longTerm.notes)
+    }
+
+    @Test
     fun `non branching strategy does not expose branching capability`() {
         val tempDir = Files.createTempDirectory("memory-manager-test")
         val store = JsonConversationStore(tempDir.resolve("conversation.json"))
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
             systemPrompt = "Системное сообщение",
-            conversationStore = store,
+            memoryStateRepository = JsonMemoryStateRepository(store),
             memoryStrategy = NoCompressionMemoryStrategy()
         )
 
@@ -248,7 +292,7 @@ class DefaultMemoryManagerTest {
         val manager = DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
             systemPrompt = "Системное сообщение",
-            conversationStore = store,
+            memoryStateRepository = JsonMemoryStateRepository(store),
             memoryStrategy = BranchingMemoryStrategy()
         )
         val branchingCapability = checkNotNull(
@@ -258,10 +302,7 @@ class DefaultMemoryManagerTest {
         manager.appendUserMessage("main-u1")
         manager.appendAssistantMessage("main-a1")
 
-        assertEquals(
-            "checkpoint-1",
-            branchingCapability.createCheckpoint().name
-        )
+        assertEquals("checkpoint-1", branchingCapability.createCheckpoint().name)
         assertEquals("option-a", branchingCapability.createBranch("option-a").name)
         assertEquals("option-b", branchingCapability.createBranch("option-b").name)
 
@@ -342,7 +383,7 @@ private class LastMessageOnlyStrategy : MemoryStrategy {
     override val type: MemoryStrategyType = MemoryStrategyType.NO_COMPRESSION
 
     override fun effectiveContext(state: MemoryState): List<ChatMessage> =
-        state.messages.takeLast(1)
+        state.shortTerm.messages.takeLast(1)
 }
 
 private class FixedConversationSummarizer(
@@ -350,4 +391,3 @@ private class FixedConversationSummarizer(
 ) : ConversationSummarizer {
     override fun summarize(messages: List<ChatMessage>): String = summary
 }
-

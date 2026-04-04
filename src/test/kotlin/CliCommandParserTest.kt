@@ -1,5 +1,6 @@
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import agent.memory.model.MemoryLayer
 import ui.cli.CliCommand
 import ui.cli.CliCommandParser
 
@@ -19,6 +20,14 @@ class CliCommandParserTest {
     @Test
     fun `parses models command`() {
         assertEquals(CliCommand.ShowModels, parser.parse("models"))
+    }
+
+    @Test
+    fun `parses memory commands`() {
+        assertEquals(CliCommand.ShowMemory(null), parser.parse("memory"))
+        assertEquals(CliCommand.ShowMemory(MemoryLayer.SHORT_TERM), parser.parse("memory short"))
+        assertEquals(CliCommand.ShowMemory(MemoryLayer.WORKING), parser.parse("memory working"))
+        assertEquals(CliCommand.ShowMemory(MemoryLayer.LONG_TERM), parser.parse("memory long"))
     }
 
     @Test

@@ -1,10 +1,12 @@
-﻿package agent.memory
+package agent.memory
 
+import agent.memory.core.MemoryStateRefreshMode
 import agent.memory.model.ConversationSummary
 import agent.memory.model.MemoryState
+import agent.memory.model.ShortTermMemory
 import agent.memory.model.SummaryStrategyState
-import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
 import agent.memory.strategy.summary.ConversationSummarizer
+import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import llm.core.model.ChatMessage
@@ -26,7 +28,7 @@ class SummaryCompressionMemoryStrategyTest {
 
         assertEquals(
             messages,
-            strategy.effectiveContext(MemoryState(messages = messages))
+            strategy.effectiveContext(MemoryState(shortTerm = ShortTermMemory(messages = messages)))
         )
     }
 
@@ -46,13 +48,15 @@ class SummaryCompressionMemoryStrategyTest {
             ChatMessage(role = ChatRole.USER, content = "u3")
         )
         val state = MemoryState(
-            messages = messages,
-            strategyState = SummaryStrategyState(
-                summary = ConversationSummary(
-                    content = "Пользователь уже рассказал о прошлой задаче.",
+            shortTerm = ShortTermMemory(
+                messages = messages,
+                strategyState = SummaryStrategyState(
+                    summary = ConversationSummary(
+                        content = "Пользователь уже рассказал о прошлой задаче.",
+                        coveredMessagesCount = 2
+                    ),
                     coveredMessagesCount = 2
-                ),
-                coveredMessagesCount = 2
+                )
             )
         )
 
@@ -69,7 +73,7 @@ class SummaryCompressionMemoryStrategyTest {
             ),
             strategy.effectiveContext(state)
         )
-        assertEquals(messages, state.messages)
+        assertEquals(messages, state.shortTerm.messages)
     }
 
     @Test
@@ -90,17 +94,19 @@ class SummaryCompressionMemoryStrategyTest {
 
         val refreshedState = strategy.refreshState(
             MemoryState(
-                messages = messages,
-                strategyState = SummaryStrategyState()
+                shortTerm = ShortTermMemory(
+                    messages = messages,
+                    strategyState = SummaryStrategyState()
+                )
             )
         )
-        val refreshedSummary = (refreshedState.strategyState as? SummaryStrategyState)?.summary
-        val refreshedStrategyState = refreshedState.strategyState as? SummaryStrategyState
+        val refreshedSummary = (refreshedState.shortTerm.strategyState as? SummaryStrategyState)?.summary
+        val refreshedStrategyState = refreshedState.shortTerm.strategyState as? SummaryStrategyState
 
         assertEquals("Пользователь: u1\nАссистент: a1", refreshedSummary?.content)
         assertEquals(2, refreshedSummary?.coveredMessagesCount)
         assertEquals(2, refreshedStrategyState?.coveredMessagesCount)
-        assertEquals(messages, refreshedState.messages)
+        assertEquals(messages, refreshedState.shortTerm.messages)
     }
 
     @Test
@@ -111,28 +117,30 @@ class SummaryCompressionMemoryStrategyTest {
             summarizer = RecordingConversationSummarizer()
         )
         val state = MemoryState(
-            messages = listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "system"),
-                ChatMessage(role = ChatRole.USER, content = "u1"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
-                ChatMessage(role = ChatRole.USER, content = "u2"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a2"),
-                ChatMessage(role = ChatRole.USER, content = "u3"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a3"),
-                ChatMessage(role = ChatRole.USER, content = "u4")
-            ),
-            strategyState = SummaryStrategyState(
-                summary = ConversationSummary(
-                    content = "Пользователь: u0\nАссистент: a0",
-                    coveredMessagesCount = 2
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(role = ChatRole.SYSTEM, content = "system"),
+                    ChatMessage(role = ChatRole.USER, content = "u1"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
+                    ChatMessage(role = ChatRole.USER, content = "u2"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a2"),
+                    ChatMessage(role = ChatRole.USER, content = "u3"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a3"),
+                    ChatMessage(role = ChatRole.USER, content = "u4")
                 ),
-                coveredMessagesCount = 2
+                strategyState = SummaryStrategyState(
+                    summary = ConversationSummary(
+                        content = "Пользователь: u0\nАссистент: a0",
+                        coveredMessagesCount = 2
+                    ),
+                    coveredMessagesCount = 2
+                )
             )
         )
 
         val refreshedState = strategy.refreshState(state)
-        val refreshedSummary = (refreshedState.strategyState as? SummaryStrategyState)?.summary
-        val refreshedStrategyState = refreshedState.strategyState as? SummaryStrategyState
+        val refreshedSummary = (refreshedState.shortTerm.strategyState as? SummaryStrategyState)?.summary
+        val refreshedStrategyState = refreshedState.shortTerm.strategyState as? SummaryStrategyState
 
         assertEquals(
             "Система: Предыдущее резюме: Пользователь: u0\nАссистент: a0\nПользователь: u2\nАссистент: a2",
@@ -140,7 +148,7 @@ class SummaryCompressionMemoryStrategyTest {
         )
         assertEquals(4, refreshedSummary?.coveredMessagesCount)
         assertEquals(4, refreshedStrategyState?.coveredMessagesCount)
-        assertEquals(state.messages, refreshedState.messages)
+        assertEquals(state.shortTerm.messages, refreshedState.shortTerm.messages)
     }
 
     @Test
@@ -151,26 +159,28 @@ class SummaryCompressionMemoryStrategyTest {
             summarizer = RecordingConversationSummarizer()
         )
         val state = MemoryState(
-            messages = listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "system"),
-                ChatMessage(role = ChatRole.USER, content = "u1"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
-                ChatMessage(role = ChatRole.USER, content = "u2"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a2"),
-                ChatMessage(role = ChatRole.USER, content = "u3"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a3"),
-                ChatMessage(role = ChatRole.USER, content = "u4")
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(role = ChatRole.SYSTEM, content = "system"),
+                    ChatMessage(role = ChatRole.USER, content = "u1"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
+                    ChatMessage(role = ChatRole.USER, content = "u2"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a2"),
+                    ChatMessage(role = ChatRole.USER, content = "u3"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a3"),
+                    ChatMessage(role = ChatRole.USER, content = "u4")
+                )
             )
         )
 
         val refreshedState = strategy.refreshState(state)
-        val refreshedSummary = (refreshedState.strategyState as? SummaryStrategyState)?.summary
-        val refreshedStrategyState = refreshedState.strategyState as? SummaryStrategyState
+        val refreshedSummary = (refreshedState.shortTerm.strategyState as? SummaryStrategyState)?.summary
+        val refreshedStrategyState = refreshedState.shortTerm.strategyState as? SummaryStrategyState
 
         assertEquals("Ассистент: a2\nПользователь: u3", refreshedSummary?.content)
         assertEquals(5, refreshedSummary?.coveredMessagesCount)
         assertEquals(5, refreshedStrategyState?.coveredMessagesCount)
-        assertEquals(state.messages, refreshedState.messages)
+        assertEquals(state.shortTerm.messages, refreshedState.shortTerm.messages)
         assertEquals(
             listOf(
                 ChatMessage(role = ChatRole.SYSTEM, content = "system"),
@@ -193,16 +203,46 @@ class SummaryCompressionMemoryStrategyTest {
             summarizer = FixedSummaryConversationSummarizer("Не должен использоваться")
         )
         val state = MemoryState(
-            messages = listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "system"),
-                ChatMessage(role = ChatRole.USER, content = "u1"),
-                ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
-                ChatMessage(role = ChatRole.USER, content = "u2")
-            ),
-            strategyState = SummaryStrategyState()
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(role = ChatRole.SYSTEM, content = "system"),
+                    ChatMessage(role = ChatRole.USER, content = "u1"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
+                    ChatMessage(role = ChatRole.USER, content = "u2")
+                ),
+                strategyState = SummaryStrategyState()
+            )
         )
 
         val refreshedState = strategy.refreshState(state)
+
+        assertEquals(state, refreshedState)
+    }
+
+    @Test
+    fun `preview refresh does not invoke summarizer and keeps state unchanged`() {
+        val strategy = SummaryCompressionMemoryStrategy(
+            recentMessagesCount = 2,
+            summaryBatchSize = 2,
+            summarizer = object : ConversationSummarizer {
+                override fun summarize(messages: List<ChatMessage>): String =
+                    error("Preview refresh must not call summarizer.")
+            }
+        )
+        val state = MemoryState(
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(role = ChatRole.SYSTEM, content = "system"),
+                    ChatMessage(role = ChatRole.USER, content = "u1"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
+                    ChatMessage(role = ChatRole.USER, content = "u2"),
+                    ChatMessage(role = ChatRole.ASSISTANT, content = "a2"),
+                    ChatMessage(role = ChatRole.USER, content = "u3")
+                )
+            )
+        )
+
+        val refreshedState = strategy.refreshState(state, MemoryStateRefreshMode.PREVIEW)
 
         assertEquals(state, refreshedState)
     }
@@ -220,4 +260,3 @@ private class FixedSummaryConversationSummarizer(
 ) : ConversationSummarizer {
     override fun summarize(messages: List<ChatMessage>): String = summary
 }
-

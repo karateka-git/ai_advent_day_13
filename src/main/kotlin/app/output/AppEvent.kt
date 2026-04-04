@@ -6,6 +6,8 @@ import agent.core.BranchCheckpointInfo
 import agent.core.BranchInfo
 import agent.core.BranchingStatus
 import agent.lifecycle.ContextCompressionStats
+import agent.memory.model.MemoryLayer
+import agent.memory.model.MemorySnapshot
 import agent.memory.strategy.MemoryStrategyOption
 import llm.core.model.ChatRole
 import llm.core.model.LanguageModelOption
@@ -42,6 +44,11 @@ sealed interface AppEvent {
     data class ModelsAvailable(
         val options: List<LanguageModelOption>,
         val currentModelId: String
+    ) : AppEvent
+
+    data class MemoryStateAvailable(
+        val snapshot: MemorySnapshot,
+        val selectedLayer: MemoryLayer?
     ) : AppEvent
 
     data class CheckpointCreated(

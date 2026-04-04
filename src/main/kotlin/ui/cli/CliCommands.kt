@@ -9,6 +9,7 @@ object CliCommands {
     const val CLEAR = "clear"
     const val MODELS = "models"
     const val USE = "use"
+    const val MEMORY = "memory"
     const val CHECKPOINT = "checkpoint"
     const val BRANCH = "branch"
     const val BRANCHES = "branches"

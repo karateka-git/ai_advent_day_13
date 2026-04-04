@@ -1,10 +1,8 @@
 ﻿package agent.storage
 
-import agent.storage.model.ConversationHistory
 import agent.storage.model.ConversationMemoryState
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import llm.core.LanguageModel
 
@@ -13,8 +11,7 @@ private const val CONTEXT_DIRECTORY = "config/conversations"
 /**
  * JSON-хранилище диалога, используемое слоем памяти.
  *
- * Хранилище читает текущий структурированный формат памяти и при необходимости использует
- * fallback на legacy-формат, содержащий только историю сообщений.
+ * Хранилище читает и пишет явный layered memory state в JSON.
  */
 class JsonConversationStore(
     private val storagePath: Path
@@ -35,13 +32,11 @@ class JsonConversationStore(
             return ConversationMemoryState()
         }
 
-        return try {
-            json.decodeFromString<ConversationMemoryState>(rawContent)
-        } catch (_: SerializationException) {
-            ConversationMemoryState(
-                messages = json.decodeFromString<ConversationHistory>(rawContent).messages
-            )
+        require(rawContent.contains("\"shortTerm\"")) {
+            "Ожидался layered memory state с секцией shortTerm."
         }
+
+        return json.decodeFromString<ConversationMemoryState>(rawContent)
     }
 
     override fun saveState(state: ConversationMemoryState) {

@@ -11,4 +11,5 @@
 
 - основной ручной smoke-check сценарий лежит в [docs/manual-smoke-checklist.md](/C:/Users/compadre/Downloads/Projects/AiAdvent/day_11/docs/manual-smoke-checklist.md)
 - `MemoryBank` только ссылается на этот сценарий и задаёт правило, когда его использовать
+- практические нюансы scripted smoke-check и проблем кодировки фиксируются в [development-policy.md](/C:/Users/compadre/Downloads/Projects/AiAdvent/day_11/MemoryBank/rules/development-policy.md)
 

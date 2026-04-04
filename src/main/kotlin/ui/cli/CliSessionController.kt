@@ -64,6 +64,16 @@ class CliSessionController(
                 CliSessionControllerResult.Continue
             }
 
+            is CliCommand.ShowMemory -> {
+                appEventSink.emit(
+                    AppEvent.MemoryStateAvailable(
+                        snapshot = state.agent.inspectMemory(),
+                        selectedLayer = command.layer
+                    )
+                )
+                CliSessionControllerResult.Continue
+            }
+
             is CliCommand.CreateCheckpoint -> {
                 try {
                     val branchingCapability = state.agent.capability<BranchingCapability>()

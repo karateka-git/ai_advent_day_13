@@ -31,8 +31,8 @@ class StickyFactsMemoryStrategy(
     override val type: MemoryStrategyType = MemoryStrategyType.STICKY_FACTS
 
     override fun effectiveContext(state: MemoryState): List<ChatMessage> {
-        val systemMessages = state.messages.filter { it.role == ChatRole.SYSTEM }
-        val dialogMessages = state.messages.filter { it.role != ChatRole.SYSTEM }
+        val systemMessages = state.shortTerm.messages.filter { it.role == ChatRole.SYSTEM }
+        val dialogMessages = state.shortTerm.messages.filter { it.role != ChatRole.SYSTEM }
         val factsState = stickyFactsState(state)
 
         return buildList {
@@ -53,23 +53,25 @@ class StickyFactsMemoryStrategy(
             return state
         }
 
-        val lastMessage = state.messages.lastOrNull()
+        val lastMessage = state.shortTerm.messages.lastOrNull()
         if (lastMessage?.role != ChatRole.USER) {
             return state
         }
 
         val factsState = stickyFactsState(state)
         val existingFacts = factsState?.facts.orEmpty()
-        val dialogMessages = state.messages.filter { it.role != ChatRole.SYSTEM }
+        val dialogMessages = state.shortTerm.messages.filter { it.role != ChatRole.SYSTEM }
         val coveredMessagesCount = factsState?.coveredMessagesCount ?: 0
         val newMessagesBatch = dialogMessages.drop(coveredMessagesCount)
         val newUserMessagesCount = newMessagesBatch.count { it.role == ChatRole.USER }
 
         if (newUserMessagesCount < factsBatchSize) {
             return state.copy(
-                strategyState = StickyFactsStrategyState(
-                    facts = existingFacts,
-                    coveredMessagesCount = coveredMessagesCount
+                shortTerm = state.shortTerm.copy(
+                    strategyState = StickyFactsStrategyState(
+                        facts = existingFacts,
+                        coveredMessagesCount = coveredMessagesCount
+                    )
                 )
             )
         }
@@ -80,15 +82,17 @@ class StickyFactsMemoryStrategy(
         )
 
         return state.copy(
-            strategyState = StickyFactsStrategyState(
-                facts = updatedFacts,
-                coveredMessagesCount = dialogMessages.size
+            shortTerm = state.shortTerm.copy(
+                strategyState = StickyFactsStrategyState(
+                    facts = updatedFacts,
+                    coveredMessagesCount = dialogMessages.size
+                )
             )
         )
     }
 
     private fun stickyFactsState(state: MemoryState): StickyFactsStrategyState? =
-        (state.strategyState as? StickyFactsStrategyState)
+        (state.shortTerm.strategyState as? StickyFactsStrategyState)
             ?.takeIf { it.strategyType == type }
 
     private fun toFactsMessage(facts: Map<String, String>): ChatMessage =

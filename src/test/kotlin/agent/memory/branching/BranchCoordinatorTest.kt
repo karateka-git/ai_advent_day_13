@@ -3,6 +3,7 @@ package agent.memory.strategy.branching
 import agent.memory.model.BranchConversationState
 import agent.memory.model.BranchingStrategyState
 import agent.memory.model.MemoryState
+import agent.memory.model.ShortTermMemory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import llm.core.model.ChatMessage
@@ -14,19 +15,21 @@ class BranchCoordinatorTest {
     @Test
     fun `creates checkpoint and branch then switches to it`() {
         val initialState = MemoryState(
-            messages = listOf(
-                ChatMessage(ChatRole.SYSTEM, "system"),
-                ChatMessage(ChatRole.USER, "u1"),
-                ChatMessage(ChatRole.ASSISTANT, "a1")
-            ),
-            strategyState = BranchingStrategyState(
-                branches = listOf(
-                    BranchConversationState(
-                        name = "main",
-                        messages = listOf(
-                            ChatMessage(ChatRole.SYSTEM, "system"),
-                            ChatMessage(ChatRole.USER, "u1"),
-                            ChatMessage(ChatRole.ASSISTANT, "a1")
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(ChatRole.SYSTEM, "system"),
+                    ChatMessage(ChatRole.USER, "u1"),
+                    ChatMessage(ChatRole.ASSISTANT, "a1")
+                ),
+                strategyState = BranchingStrategyState(
+                    branches = listOf(
+                        BranchConversationState(
+                            name = "main",
+                            messages = listOf(
+                                ChatMessage(ChatRole.SYSTEM, "system"),
+                                ChatMessage(ChatRole.USER, "u1"),
+                                ChatMessage(ChatRole.ASSISTANT, "a1")
+                            )
                         )
                     )
                 )
@@ -39,17 +42,20 @@ class BranchCoordinatorTest {
         val branchResult = coordinator.createBranch(checkpointResult.state, "option-a")
         assertEquals("option-a", branchResult.info.name)
 
+        val branchingState = branchResult.state.shortTerm.strategyState as BranchingStrategyState
         val switchedState = branchResult.state.copy(
-            strategyState = (branchResult.state.strategyState as BranchingStrategyState).copy(
-                branches = (branchResult.state.strategyState as BranchingStrategyState).branches.map { branch ->
-                    if (branch.name == "option-a") {
-                        branch.copy(
-                            messages = branch.messages + ChatMessage(ChatRole.USER, "branch-u1")
-                        )
-                    } else {
-                        branch
+            shortTerm = branchResult.state.shortTerm.copy(
+                strategyState = branchingState.copy(
+                    branches = branchingState.branches.map { branch ->
+                        if (branch.name == "option-a") {
+                            branch.copy(
+                                messages = branch.messages + ChatMessage(ChatRole.USER, "branch-u1")
+                            )
+                        } else {
+                            branch
+                        }
                     }
-                }
+                )
             )
         )
 
@@ -63,7 +69,7 @@ class BranchCoordinatorTest {
                 ChatMessage(ChatRole.ASSISTANT, "a1"),
                 ChatMessage(ChatRole.USER, "branch-u1")
             ),
-            switchResult.state.messages
+            switchResult.state.shortTerm.messages
         )
     }
 }

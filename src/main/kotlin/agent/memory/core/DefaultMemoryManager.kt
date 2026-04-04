@@ -1,70 +1,71 @@
 package agent.memory.core
 
 import agent.capability.AgentCapability
-import agent.memory.strategy.branching.BranchingCapability
 import agent.core.AgentTokenStats
-import agent.core.BranchCheckpointInfo
-import agent.core.BranchInfo
-import agent.core.BranchingStatus
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.ContextCompressionStats
 import agent.lifecycle.NoOpAgentLifecycleListener
-import agent.memory.strategy.branching.BranchCoordinator
+import agent.memory.layer.MemoryLayerAllocator
+import agent.memory.layer.MemoryLayerWritePolicy
+import agent.memory.layer.RuleBasedMemoryLayerAllocator
+import agent.memory.layer.UserMessageOnlyMemoryLayerWritePolicy
+import agent.memory.model.MemorySnapshot
 import agent.memory.model.MemoryState
-import agent.memory.model.SummaryStrategyState
-import agent.memory.persistence.ConversationMemoryStateMapper
+import agent.memory.model.ShortTermMemory
+import agent.memory.persistence.JsonMemoryStateRepository
+import agent.memory.persistence.MemoryStateRepository
+import agent.memory.prompt.DefaultMemoryContextService
+import agent.memory.prompt.LayeredMemoryPromptAssembler
+import agent.memory.prompt.MemoryContextService
 import agent.memory.strategy.MemoryStrategyType
+import agent.memory.strategy.branching.BranchCoordinator
+import agent.memory.strategy.branching.BranchingCapability
+import agent.memory.strategy.branching.BranchingMemoryCapabilityAdapter
 import agent.memory.strategy.nocompression.NoCompressionMemoryStrategy
-import agent.storage.JsonConversationStore
 import java.nio.file.Path
 import llm.core.LanguageModel
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
 
 /**
- * Базовый in-memory менеджер диалога, используемый агентом.
- *
- * Хранит текущее состояние памяти, делегирует подготовку prompt в [MemoryStrategy], сохраняет
- * состояние на диск и сообщает статистику сжатия через [AgentLifecycleListener].
+ * Базовый in-memory менеджер диалога с явной layered memory model.
  */
 class DefaultMemoryManager(
     private val languageModel: LanguageModel,
     private val systemPrompt: String,
-    private val conversationStore: JsonConversationStore = JsonConversationStore.forLanguageModel(languageModel),
+    private val memoryStateRepository: MemoryStateRepository = JsonMemoryStateRepository.forLanguageModel(languageModel),
     private val memoryStrategy: MemoryStrategy = NoCompressionMemoryStrategy(),
     private val lifecycleListener: AgentLifecycleListener = NoOpAgentLifecycleListener,
-    private val stateMapper: ConversationMemoryStateMapper = ConversationMemoryStateMapper(),
-    private val branchCoordinator: BranchCoordinator = BranchCoordinator()
+    private val branchCoordinator: BranchCoordinator = BranchCoordinator(),
+    private val memoryLayerAllocator: MemoryLayerAllocator = RuleBasedMemoryLayerAllocator(),
+    private val memoryLayerWritePolicy: MemoryLayerWritePolicy = UserMessageOnlyMemoryLayerWritePolicy(),
+    private val clearPolicy: MemoryClearPolicy = TaskScopedMemoryClearPolicy(),
+    private val compressionObserver: MemoryCompressionObserver = SummaryBasedMemoryCompressionObserver(),
+    private val contextService: MemoryContextService = DefaultMemoryContextService(
+        memoryStrategyProvider = { memoryStrategy },
+        promptAssembler = LayeredMemoryPromptAssembler()
+    )
 ) : MemoryManager {
-    private var memoryState = loadMemoryState()
+    private var state = loadMemoryState()
 
-    private val branchingCapability = object : BranchingCapability {
-        override fun createCheckpoint(name: String?): BranchCheckpointInfo =
-            this@DefaultMemoryManager.createCheckpoint(name)
+    private val branchingCapability = BranchingMemoryCapabilityAdapter(
+        branchCoordinator = branchCoordinator,
+        enabled = { memoryStrategy.type == MemoryStrategyType.BRANCHING },
+        stateProvider = { state },
+        stateUpdater = { updatedState -> state = updatedState },
+        persistState = ::saveState
+    )
 
-        override fun createBranch(name: String): BranchInfo =
-            this@DefaultMemoryManager.createBranch(name)
-
-        override fun switchBranch(name: String): BranchInfo =
-            this@DefaultMemoryManager.switchBranch(name)
-
-        override fun branchStatus(): BranchingStatus =
-            this@DefaultMemoryManager.branchStatus()
-    }
-
-    override fun currentConversation(): List<ChatMessage> = memoryState.messages.toList()
-
-    override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? =
-        branchingCapability
-            .takeIf { memoryStrategy.type == MemoryStrategyType.BRANCHING && capabilityType.isInstance(it) }
-            ?.let(capabilityType::cast)
+    override fun currentConversation(): List<ChatMessage> = state.shortTerm.messages.toList()
 
     override fun previewTokenStats(userPrompt: String): AgentTokenStats {
-        val effectiveConversation = effectiveConversation()
+        val effectiveConversation = contextService.effectiveConversation(systemPrompt, state)
         val historyTokens = languageModel.tokenCounter?.countMessages(effectiveConversation)
         val userPromptTokens = languageModel.tokenCounter?.countText(userPrompt)
-        val promptTokensLocal = languageModel.tokenCounter?.countMessages(
-            effectiveConversationWithUserPrompt(userPrompt)
+        val promptTokensLocal = contextService.countPromptTokens(
+            languageModel = languageModel,
+            systemPrompt = systemPrompt,
+            state = previewStateForUserPrompt(userPrompt)
         )
 
         return AgentTokenStats(
@@ -75,56 +76,67 @@ class DefaultMemoryManager(
     }
 
     override fun appendUserMessage(userPrompt: String): List<ChatMessage> {
-        val stateWithUserMessage = memoryState.copy(
-            messages = memoryState.messages + ChatMessage(role = ChatRole.USER, content = userPrompt)
-        )
-        memoryState = refreshState(stateWithUserMessage, notifyCompression = true)
+        val userMessage = ChatMessage(role = ChatRole.USER, content = userPrompt)
+        val stateWithMessage = appendShortTermMessage(state, userMessage)
+        val stateWithAllocatedLayers = applyAllocationIfAllowed(stateWithMessage, userMessage)
+        state = refreshState(stateWithAllocatedLayers, notifyCompression = true)
         saveState()
-        return effectiveConversation()
+        return contextService.effectiveConversation(systemPrompt, state)
     }
 
     override fun appendAssistantMessage(content: String) {
-        val updatedState = memoryState.copy(
-            messages = memoryState.messages + ChatMessage(role = ChatRole.ASSISTANT, content = content)
-        )
-        memoryState =
+        val assistantMessage = ChatMessage(role = ChatRole.ASSISTANT, content = content)
+        val stateWithMessage = appendShortTermMessage(state, assistantMessage)
+        val stateWithAllocatedLayers = applyAllocationIfAllowed(stateWithMessage, assistantMessage)
+        state =
             if (memoryStrategy.type == MemoryStrategyType.BRANCHING) {
-                memoryStrategy.refreshState(updatedState, MemoryStateRefreshMode.REGULAR)
+                memoryStrategy.refreshState(stateWithAllocatedLayers, MemoryStateRefreshMode.REGULAR)
             } else {
-                updatedState
+                stateWithAllocatedLayers
             }
         saveState()
     }
 
     override fun clear() {
-        memoryState = memoryStrategy.refreshState(
-            MemoryState(messages = listOf(createSystemMessage())),
-            MemoryStateRefreshMode.REGULAR
+        state = clearPolicy.clear(
+            state = state,
+            systemMessage = createSystemMessage(),
+            memoryStrategy = memoryStrategy
         )
         saveState()
     }
 
     override fun replaceContextFromFile(sourcePath: Path) {
-        val importedState = stateMapper.toRuntime(JsonConversationStore(sourcePath).loadState())
-        require(importedState.messages.isNotEmpty()) {
+        val importedState = memoryStateRepository.loadFrom(sourcePath)
+        require(importedState.shortTerm.messages.isNotEmpty()) {
             "Файл истории $sourcePath пустой или не содержит сообщений."
         }
 
-        memoryState = memoryStrategy.refreshState(importedState, MemoryStateRefreshMode.REGULAR)
+        state = memoryStrategy.refreshState(importedState, MemoryStateRefreshMode.REGULAR)
         saveState()
     }
 
-    /**
-     * Загружает сохранённое состояние памяти с диска или создаёт новое с системным сообщением.
-     */
+    override fun memoryState(): MemoryState = state
+
+    override fun memorySnapshot(): MemorySnapshot =
+        MemorySnapshot(
+            state = state,
+            shortTermStrategyType = memoryStrategy.type
+        )
+
+    override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? =
+        branchingCapability
+            .takeIf { memoryStrategy.type == MemoryStrategyType.BRANCHING && capabilityType.isInstance(it) }
+            ?.let(capabilityType::cast)
+
     private fun loadMemoryState(): MemoryState {
-        val savedState = stateMapper.toRuntime(conversationStore.loadState())
-        if (savedState.messages.isNotEmpty()) {
+        val savedState = memoryStateRepository.load()
+        if (savedState.shortTerm.messages.isNotEmpty()) {
             return memoryStrategy.refreshState(savedState, MemoryStateRefreshMode.REGULAR)
         }
 
         val initialState = memoryStrategy.refreshState(
-            MemoryState(messages = listOf(createSystemMessage())),
+            MemoryState(shortTerm = ShortTermMemory(messages = listOf(createSystemMessage()))),
             MemoryStateRefreshMode.REGULAR
         )
         saveState(initialState)
@@ -132,112 +144,81 @@ class DefaultMemoryManager(
     }
 
     private fun saveState() {
-        saveState(memoryState)
+        saveState(state)
     }
 
-    private fun saveState(state: MemoryState) {
-        memoryState = state
-        conversationStore.saveState(stateMapper.toStored(memoryState))
+    private fun saveState(updatedState: MemoryState) {
+        state = updatedState
+        memoryStateRepository.save(state)
     }
 
-    /**
-     * Формирует базовое системное сообщение для нового или очищенного диалога.
-     */
     private fun createSystemMessage(): ChatMessage =
         ChatMessage(
             role = ChatRole.SYSTEM,
             content = systemPrompt
         )
 
-    /**
-     * Возвращает эффективный контекст для текущего состояния согласно активной стратегии.
-     */
-    private fun effectiveConversation(): List<ChatMessage> =
-        memoryStrategy.effectiveContext(memoryState)
-
-    /**
-     * Строит предварительный эффективный контекст для гипотетического следующего сообщения.
-     */
-    private fun effectiveConversationWithUserPrompt(userPrompt: String): List<ChatMessage> =
-        memoryStrategy.effectiveContext(
-            refreshState(
-                memoryState.copy(
-                    messages = memoryState.messages + ChatMessage(role = ChatRole.USER, content = userPrompt)
-                ),
-                notifyCompression = false,
-                mode = MemoryStateRefreshMode.PREVIEW
-            )
+    private fun previewStateForUserPrompt(userPrompt: String): MemoryState {
+        val userMessage = ChatMessage(role = ChatRole.USER, content = userPrompt)
+        return refreshState(
+            applyAllocationIfAllowed(
+                appendShortTermMessage(state, userMessage),
+                userMessage
+            ),
+            notifyCompression = false,
+            mode = MemoryStateRefreshMode.PREVIEW
         )
+    }
 
-    /**
-     * Применяет стратегию памяти к переданному состоянию и при необходимости сообщает статистику
-     * сжатия.
-     */
     private fun refreshState(
-        state: MemoryState,
+        updatedState: MemoryState,
         notifyCompression: Boolean,
         mode: MemoryStateRefreshMode = MemoryStateRefreshMode.REGULAR
     ): MemoryState {
-        val refreshedState = memoryStrategy.refreshState(state, mode)
-        if (!notifyCompression || !compressionApplied(state, refreshedState)) {
+        val refreshedState = memoryStrategy.refreshState(updatedState, mode)
+        val compressionStats =
+            if (notifyCompression) {
+                compressionObserver.buildStats(
+                    previousState = updatedState,
+                    refreshedState = refreshedState,
+                    countTokens = ::countPromptTokens
+                )
+            } else {
+                null
+            }
+        if (compressionStats == null) {
             return refreshedState
         }
 
         lifecycleListener.onContextCompressionStarted()
-        lifecycleListener.onContextCompressionFinished(
-            ContextCompressionStats(
-                tokensBefore = languageModel.tokenCounter?.countMessages(memoryStrategy.effectiveContext(state)),
-                tokensAfter = languageModel.tokenCounter?.countMessages(memoryStrategy.effectiveContext(refreshedState))
-            )
-        )
+        lifecycleListener.onContextCompressionFinished(compressionStats)
 
         return refreshedState
     }
 
-    /**
-     * Определяет, изменилось ли покрытие истории rolling summary на последнем проходе.
-     */
-    private fun compressionApplied(previousState: MemoryState, refreshedState: MemoryState): Boolean =
-        summaryCoveredMessagesCount(refreshedState) > summaryCoveredMessagesCount(previousState)
+    private fun countPromptTokens(state: MemoryState): Int? =
+        contextService.countPromptTokens(
+            languageModel = languageModel,
+            systemPrompt = systemPrompt,
+            state = state
+        )
 
-    private fun summaryCoveredMessagesCount(state: MemoryState): Int =
-        (state.strategyState as? SummaryStrategyState)
-            ?.takeIf { it.strategyType == MemoryStrategyType.SUMMARY_COMPRESSION }
-            ?.coveredMessagesCount
-            ?: 0
+    private fun appendShortTermMessage(currentState: MemoryState, message: ChatMessage): MemoryState =
+        currentState.copy(
+            shortTerm = currentState.shortTerm.copy(
+                messages = currentState.shortTerm.messages + message
+            )
+        )
 
-    private fun createCheckpoint(name: String?): BranchCheckpointInfo {
-        requireBranchingEnabled()
-        val result = branchCoordinator.createCheckpoint(memoryState, name)
-        memoryState = result.state
-        saveState()
-        return result.info
-    }
-
-    private fun createBranch(name: String): BranchInfo {
-        requireBranchingEnabled()
-        val result = branchCoordinator.createBranch(memoryState, name)
-        memoryState = result.state
-        saveState()
-        return result.info
-    }
-
-    private fun switchBranch(name: String): BranchInfo {
-        requireBranchingEnabled()
-        val result = branchCoordinator.switchBranch(memoryState, name)
-        memoryState = result.state
-        saveState()
-        return result.info
-    }
-
-    private fun branchStatus(): BranchingStatus {
-        requireBranchingEnabled()
-        return branchCoordinator.branchStatus(memoryState)
-    }
-
-    private fun requireBranchingEnabled() {
-        require(memoryStrategy.type == MemoryStrategyType.BRANCHING) {
-            "Команды ветвления доступны только для стратегии Branching."
+    private fun applyAllocationIfAllowed(currentState: MemoryState, message: ChatMessage): MemoryState {
+        if (!memoryLayerWritePolicy.shouldAllocate(message)) {
+            return currentState
         }
+
+        val allocation = memoryLayerAllocator.allocate(currentState, message)
+        return currentState.copy(
+            working = allocation.workingMemory,
+            longTerm = allocation.longTermMemory
+        )
     }
 }

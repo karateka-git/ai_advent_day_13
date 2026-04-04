@@ -10,8 +10,16 @@ import agent.format.ResponseFormat
 import agent.format.TextResponseFormat
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.NoOpAgentLifecycleListener
+import agent.memory.model.LongTermMemory
+import agent.memory.model.MemoryLayer
+import agent.memory.model.MemoryNote
+import agent.memory.model.MemorySnapshot
+import agent.memory.model.MemoryState
+import agent.memory.model.ShortTermMemory
+import agent.memory.model.WorkingMemory
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
+import agent.memory.strategy.branching.BranchingCapability
 import app.output.AppEvent
 import app.output.AppEventSink
 import java.net.http.HttpClient
@@ -25,7 +33,6 @@ import llm.core.model.ChatMessage
 import llm.core.model.LanguageModelInfo
 import llm.core.model.LanguageModelOption
 import llm.core.model.LanguageModelResponse
-import agent.memory.strategy.branching.BranchingCapability
 import ui.cli.CliSessionController
 import ui.cli.CliSessionControllerResult
 import ui.cli.CliSessionState
@@ -87,6 +94,25 @@ class CliSessionControllerTest {
                         )
                     ),
                     currentModelId = "timeweb"
+                )
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `shows memory through current agent`() {
+        val sink = RecordingAppEventSink()
+        val controller = createController(sink = sink)
+
+        val result = controller.handle("memory long")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.MemoryStateAvailable(
+                    snapshot = FakeAgent.memorySnapshot(),
+                    selectedLayer = MemoryLayer.LONG_TERM
                 )
             ),
             sink.events
@@ -429,6 +455,8 @@ private class FakeAgent(
         error("Не должен вызываться в этом тесте.")
     }
 
+    override fun inspectMemory(): MemorySnapshot = memorySnapshot()
+
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? {
         val branchingCapability = object : BranchingCapability {
             override fun createCheckpoint(name: String?): BranchCheckpointInfo = checkpointInfo
@@ -443,6 +471,25 @@ private class FakeAgent(
         return capabilityType
             .takeIf { it.isInstance(branchingCapability) }
             ?.cast(branchingCapability)
+    }
+
+    companion object {
+        fun memorySnapshot(): MemorySnapshot =
+            MemorySnapshot(
+                state = MemoryState(
+                    shortTerm = ShortTermMemory(),
+                    working = WorkingMemory(),
+                    longTerm = LongTermMemory(
+                        notes = listOf(
+                            MemoryNote(
+                                category = "communication_style",
+                                content = "Отвечай кратко"
+                            )
+                        )
+                    )
+                ),
+                shortTermStrategyType = MemoryStrategyType.SUMMARY_COMPRESSION
+            )
     }
 }
 

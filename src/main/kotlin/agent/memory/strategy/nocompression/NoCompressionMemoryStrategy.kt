@@ -14,7 +14,7 @@ class NoCompressionMemoryStrategy : MemoryStrategy {
     override val type: MemoryStrategyType = MemoryStrategyType.NO_COMPRESSION
 
     override fun effectiveContext(state: MemoryState): List<ChatMessage> =
-        state.messages.toList()
+        state.shortTerm.messages.toList()
 }
 
 

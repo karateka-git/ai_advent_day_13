@@ -18,7 +18,7 @@ class BranchingMemoryStrategy : MemoryStrategy {
     override val type: MemoryStrategyType = MemoryStrategyType.BRANCHING
 
     override fun effectiveContext(state: MemoryState): List<ChatMessage> =
-        state.messages.toList()
+        state.shortTerm.messages.toList()
 
     override fun refreshState(
         state: MemoryState,
@@ -30,13 +30,13 @@ class BranchingMemoryStrategy : MemoryStrategy {
                 listOf(
                     BranchConversationState(
                         name = BranchingStrategyState.DEFAULT_BRANCH_NAME,
-                        messages = state.messages
+                        messages = state.shortTerm.messages
                     )
                 )
             } else {
                 branchingState.branches.map { branch ->
                     if (branch.name == branchingState.activeBranchName) {
-                        branch.copy(messages = state.messages)
+                        branch.copy(messages = state.shortTerm.messages)
                     } else {
                         branch
                     }
@@ -44,21 +44,23 @@ class BranchingMemoryStrategy : MemoryStrategy {
             }
 
         return state.copy(
-            strategyState = branchingState.copy(
-                activeBranchName = branchingState.activeBranchName.ifBlank { BranchingStrategyState.DEFAULT_BRANCH_NAME },
-                branches = branches
+            shortTerm = state.shortTerm.copy(
+                strategyState = branchingState.copy(
+                    activeBranchName = branchingState.activeBranchName.ifBlank { BranchingStrategyState.DEFAULT_BRANCH_NAME },
+                    branches = branches
+                )
             )
         )
     }
 
     private fun branchingState(state: MemoryState): BranchingStrategyState =
-        (state.strategyState as? BranchingStrategyState)
+        (state.shortTerm.strategyState as? BranchingStrategyState)
             ?.takeIf { it.strategyType == type }
             ?: BranchingStrategyState(
                 branches = listOf(
                     BranchConversationState(
                         name = BranchingStrategyState.DEFAULT_BRANCH_NAME,
-                        messages = state.messages
+                        messages = state.shortTerm.messages
                     )
                 )
             )

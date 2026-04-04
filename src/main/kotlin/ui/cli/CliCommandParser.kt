@@ -1,5 +1,7 @@
 package ui.cli
 
+import agent.memory.model.MemoryLayer
+
 /**
  * Разбирает строку пользовательского ввода в типизированную CLI-команду.
  */
@@ -15,6 +17,10 @@ class CliCommandParser {
 
             input.equals(CliCommands.CLEAR, ignoreCase = true) -> CliCommand.Clear
             input.equals(CliCommands.MODELS, ignoreCase = true) -> CliCommand.ShowModels
+            input.equals(CliCommands.MEMORY, ignoreCase = true) -> CliCommand.ShowMemory(null)
+            input.equals("${CliCommands.MEMORY} short", ignoreCase = true) -> CliCommand.ShowMemory(MemoryLayer.SHORT_TERM)
+            input.equals("${CliCommands.MEMORY} working", ignoreCase = true) -> CliCommand.ShowMemory(MemoryLayer.WORKING)
+            input.equals("${CliCommands.MEMORY} long", ignoreCase = true) -> CliCommand.ShowMemory(MemoryLayer.LONG_TERM)
             input.equals(CliCommands.CHECKPOINT, ignoreCase = true) ->
                 CliCommand.CreateCheckpoint(null)
             input.startsWith("${CliCommands.CHECKPOINT} ", ignoreCase = true) ->
@@ -55,6 +61,13 @@ sealed interface CliCommand {
      * Показ списка доступных моделей.
      */
     data object ShowModels : CliCommand
+
+    /**
+     * Показ содержимого одного слоя памяти или всех слоёв сразу.
+     */
+    data class ShowMemory(
+        val layer: MemoryLayer?
+    ) : CliCommand
 
     /**
      * Создание checkpoint активной ветки.

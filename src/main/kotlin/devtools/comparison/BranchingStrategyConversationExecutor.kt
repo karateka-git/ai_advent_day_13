@@ -5,6 +5,7 @@ import agent.format.TextResponseFormat
 import agent.impl.MrAgent
 import agent.lifecycle.NoOpAgentLifecycleListener
 import agent.memory.core.DefaultMemoryManager
+import agent.memory.persistence.JsonMemoryStateRepository
 import agent.memory.strategy.MemoryStrategyFactory
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.branching.BranchingCapability
@@ -36,7 +37,7 @@ class BranchingStrategyConversationExecutor(
         val memoryManager = DefaultMemoryManager(
             languageModel = tracingLanguageModel,
             systemPrompt = buildSystemPrompt(),
-            conversationStore = JsonConversationStore(storagePath),
+            memoryStateRepository = JsonMemoryStateRepository(JsonConversationStore(storagePath)),
             memoryStrategy = strategy,
             lifecycleListener = NoOpAgentLifecycleListener
         )

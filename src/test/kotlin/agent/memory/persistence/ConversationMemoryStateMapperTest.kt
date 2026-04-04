@@ -4,9 +4,13 @@ import agent.memory.model.BranchCheckpointState
 import agent.memory.model.BranchConversationState
 import agent.memory.model.BranchingStrategyState
 import agent.memory.model.ConversationSummary
+import agent.memory.model.LongTermMemory
+import agent.memory.model.MemoryNote
 import agent.memory.model.MemoryState
+import agent.memory.model.ShortTermMemory
 import agent.memory.model.StickyFactsStrategyState
 import agent.memory.model.SummaryStrategyState
+import agent.memory.model.WorkingMemory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import llm.core.model.ChatMessage
@@ -18,16 +22,24 @@ class ConversationMemoryStateMapperTest {
     @Test
     fun `maps summary strategy state to stored and back`() {
         val runtimeState = MemoryState(
-            messages = listOf(
-                ChatMessage(ChatRole.SYSTEM, "system"),
-                ChatMessage(ChatRole.USER, "u1")
-            ),
-            strategyState = SummaryStrategyState(
-                summary = ConversationSummary(
-                    content = "summary",
-                    coveredMessagesCount = 2
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(ChatRole.SYSTEM, "system"),
+                    ChatMessage(ChatRole.USER, "u1")
                 ),
-                coveredMessagesCount = 2
+                strategyState = SummaryStrategyState(
+                    summary = ConversationSummary(
+                        content = "summary",
+                        coveredMessagesCount = 2
+                    ),
+                    coveredMessagesCount = 2
+                )
+            ),
+            working = WorkingMemory(
+                notes = listOf(MemoryNote(category = "goal", content = "Собрать ТЗ"))
+            ),
+            longTerm = LongTermMemory(
+                notes = listOf(MemoryNote(category = "communication_style", content = "Отвечай кратко"))
             )
         )
 
@@ -39,38 +51,40 @@ class ConversationMemoryStateMapperTest {
     @Test
     fun `maps sticky facts and branching strategy state to stored and back`() {
         val runtimeState = MemoryState(
-            messages = listOf(
-                ChatMessage(ChatRole.SYSTEM, "system"),
-                ChatMessage(ChatRole.USER, "u1"),
-                ChatMessage(ChatRole.ASSISTANT, "a1")
-            ),
-            strategyState = BranchingStrategyState(
-                activeBranchName = "option-a",
-                latestCheckpointName = "base",
-                checkpoints = listOf(
-                    BranchCheckpointState(
-                        name = "base",
-                        messages = listOf(
-                            ChatMessage(ChatRole.SYSTEM, "system"),
-                            ChatMessage(ChatRole.USER, "u1")
-                        )
-                    )
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(ChatRole.SYSTEM, "system"),
+                    ChatMessage(ChatRole.USER, "u1"),
+                    ChatMessage(ChatRole.ASSISTANT, "a1")
                 ),
-                branches = listOf(
-                    BranchConversationState(
-                        name = "main",
-                        messages = listOf(
-                            ChatMessage(ChatRole.SYSTEM, "system"),
-                            ChatMessage(ChatRole.USER, "u1")
+                strategyState = BranchingStrategyState(
+                    activeBranchName = "option-a",
+                    latestCheckpointName = "base",
+                    checkpoints = listOf(
+                        BranchCheckpointState(
+                            name = "base",
+                            messages = listOf(
+                                ChatMessage(ChatRole.SYSTEM, "system"),
+                                ChatMessage(ChatRole.USER, "u1")
+                            )
                         )
                     ),
-                    BranchConversationState(
-                        name = "option-a",
-                        sourceCheckpointName = "base",
-                        messages = listOf(
-                            ChatMessage(ChatRole.SYSTEM, "system"),
-                            ChatMessage(ChatRole.USER, "u1"),
-                            ChatMessage(ChatRole.ASSISTANT, "a1")
+                    branches = listOf(
+                        BranchConversationState(
+                            name = "main",
+                            messages = listOf(
+                                ChatMessage(ChatRole.SYSTEM, "system"),
+                                ChatMessage(ChatRole.USER, "u1")
+                            )
+                        ),
+                        BranchConversationState(
+                            name = "option-a",
+                            sourceCheckpointName = "base",
+                            messages = listOf(
+                                ChatMessage(ChatRole.SYSTEM, "system"),
+                                ChatMessage(ChatRole.USER, "u1"),
+                                ChatMessage(ChatRole.ASSISTANT, "a1")
+                            )
                         )
                     )
                 )
@@ -82,13 +96,15 @@ class ConversationMemoryStateMapperTest {
         assertEquals(runtimeState, restoredBranchingState)
 
         val stickyFactsState = MemoryState(
-            messages = listOf(
-                ChatMessage(ChatRole.SYSTEM, "system"),
-                ChatMessage(ChatRole.USER, "u1")
-            ),
-            strategyState = StickyFactsStrategyState(
-                facts = mapOf("goal" to "Собрать ТЗ"),
-                coveredMessagesCount = 1
+            shortTerm = ShortTermMemory(
+                messages = listOf(
+                    ChatMessage(ChatRole.SYSTEM, "system"),
+                    ChatMessage(ChatRole.USER, "u1")
+                ),
+                strategyState = StickyFactsStrategyState(
+                    facts = mapOf("goal" to "Собрать ТЗ"),
+                    coveredMessagesCount = 1
+                )
             )
         )
 

@@ -56,6 +56,10 @@ Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\U
 
 - `clear` — очищает контекст, сохраняя системное сообщение.
 - `models` — показывает доступные модели и их статус.
+- `memory` — показывает все слои памяти.
+- `memory short` — показывает short-term память.
+- `memory working` — показывает working memory текущей задачи.
+- `memory long` — показывает long-term memory.
 - `use <id>` — переключает модель. При переключении заново выбирается стратегия памяти.
 - `exit` / `quit` — завершает приложение.
 
@@ -69,6 +73,12 @@ Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\U
 - `branch use <name>` — переключает диалог на выбранную ветку.
 
 ## Стратегии памяти
+
+В проекте используется layered memory model:
+
+- `short-term` — текущий диалог и выбранная strategy short-term памяти;
+- `working` — данные текущей задачи;
+- `long-term` — профиль, устойчивые решения и повторно полезные знания.
 
 По умолчанию приложение стартует со стратегией `Без сжатия`.
 
@@ -119,6 +129,15 @@ Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\U
 
 Создание стратегий централизовано в `MemoryStrategyFactory`.
 
+## Как собирается prompt
+
+Итоговый prompt собирается в таком порядке:
+
+1. system prompt
+2. long-term memory
+3. working memory
+4. short-term context из выбранной стратегии
+
 ## Архитектура
 
 Проект сейчас устроен по принципу:
@@ -145,10 +164,17 @@ Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\U
   - `DefaultMemoryManager`
   - `MemoryManager`
   - `MemoryStrategy`
+- `agent/memory/layer`
+  - `MemoryLayerAllocator`
+  - `RuleBasedMemoryLayerAllocator`
 - `agent/memory/model`
   - `MemoryState`
-  - `MemoryMetadata`
+  - `ShortTermMemory`
+  - `WorkingMemory`
+  - `LongTermMemory`
   - `StrategyState`
+- `agent/memory/prompt`
+  - `LayeredMemoryPromptAssembler`
 - `agent/memory/strategy`
   - `MemoryStrategyFactory`
   - `MemoryStrategyType`

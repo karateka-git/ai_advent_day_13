@@ -5,8 +5,31 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ConversationMemoryState(
+    val shortTerm: StoredShortTermMemory = StoredShortTermMemory(),
+    val working: StoredWorkingMemory = StoredWorkingMemory(),
+    val longTerm: StoredLongTermMemory = StoredLongTermMemory()
+)
+
+@Serializable
+data class StoredMemoryNote(
+    val category: String,
+    val content: String
+)
+
+@Serializable
+data class StoredShortTermMemory(
     val messages: List<StoredMessage> = emptyList(),
     val strategyState: StoredStrategyState? = null
+)
+
+@Serializable
+data class StoredWorkingMemory(
+    val notes: List<StoredMemoryNote> = emptyList()
+)
+
+@Serializable
+data class StoredLongTermMemory(
+    val notes: List<StoredMemoryNote> = emptyList()
 )
 
 /**

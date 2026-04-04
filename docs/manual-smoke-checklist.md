@@ -79,6 +79,45 @@ clear
 - приложение отвечает;
 - token preview и ответ отображаются корректно;
 - `clear` очищает контекст, не ломая сессию.
+- команда `memory` показывает многослойное состояние памяти без падений.
+
+## Проверка layered memory
+
+### Действия
+
+1. Переключить модель через `use <model_id>`.
+2. Выбрать любую стратегию short-term памяти, например `Без сжатия`.
+3. Отправить по очереди:
+
+```text
+Отвечай кратко и на русском.
+Цель проекта — Telegram-бот для записи на пробный урок.
+Срок — две недели, интеграция только с Google Sheets.
+```
+
+4. Проверить:
+
+```text
+memory long
+memory working
+```
+
+5. Затем спросить:
+
+```text
+Напомни мой стиль общения, цель и ограничения проекта.
+```
+
+### Ожидаемый результат
+
+- в `memory long` есть стиль общения;
+- в `memory working` есть цель, срок и интеграция;
+- ответ ассистента использует данные из working и long-term памяти;
+- short-term стратегия продолжает работать независимо от working/long-term слоёв.
+- в persisted JSON есть отдельные секции:
+  - `shortTerm`
+  - `working`
+  - `longTerm`
 
 ## Стратегия `Без сжатия`
 
@@ -105,8 +144,9 @@ use <model_id>
 - ответ содержит оба факта:
   - две недели;
   - только Google Sheets;
-- в JSON есть только `messages`;
-- `strategyState` отсутствует или равен `null`.
+- в JSON есть `shortTerm.messages`;
+- `shortTerm.strategyState` отсутствует или равен `null`;
+- `working` и `longTerm` сохраняются отдельно от short-term слоя.
 
 ## Стратегия `Сжатие через summary`
 
@@ -128,11 +168,12 @@ CRM на первом этапе не нужна.
 ### Ожидаемый результат
 
 - ответы учитывают ранние факты из диалога;
-- в JSON `strategyState` имеет тип `summary_compression`;
-- внутри есть только summary-данные:
+- в JSON `shortTerm.strategyState` имеет тип `summary_compression`;
+- внутри `shortTerm.strategyState` есть только summary-данные:
   - `summary`
   - `coveredMessagesCount`
 - нет facts- или branching-полей.
+- `working` и `longTerm` остаются в отдельных секциях верхнего уровня.
 
 ## Стратегия `Скользящее окно`
 
@@ -152,8 +193,9 @@ CRM на первом этапе не нужна.
 ### Ожидаемый результат
 
 - ответ сильнее зависит от последних сообщений, чем от ранних;
-- в JSON сохраняются все `messages`;
-- `strategyState` отсутствует или равен `null`.
+- в JSON сохраняются `shortTerm.messages`;
+- `shortTerm.strategyState` отсутствует или равен `null`;
+- `working` и `longTerm` не смешиваются с short-term данными.
 
 ## Стратегия `Sticky Facts`
 
@@ -178,11 +220,12 @@ CRM на первом этапе не нужна.
 ### Ожидаемый результат
 
 - ответ опирается на сохранённые facts;
-- в JSON `strategyState` имеет тип `sticky_facts`;
-- внутри есть:
+- в JSON `shortTerm.strategyState` имеет тип `sticky_facts`;
+- внутри `shortTerm.strategyState` есть:
   - `facts`
   - `coveredMessagesCount`
 - нет summary- или branching-полей.
+- `working` и `longTerm` остаются отдельными секциями верхнего уровня.
 
 ## Стратегия `Ветки диалога`
 
@@ -237,33 +280,41 @@ branches
 
 - ветки не смешивают контекст;
 - `branches` показывает активную ветку и список всех веток;
-- в JSON `strategyState` имеет тип `branching`;
-- внутри есть только branching-данные:
+- в JSON `shortTerm.strategyState` имеет тип `branching`;
+- внутри `shortTerm.strategyState` есть только branching-данные:
   - `activeBranchName`
   - `latestCheckpointName`
   - `checkpoints`
   - `branches`
+- `working` и `longTerm` остаются общими и не становятся branch-aware на этом этапе.
 
 ## Проверка persisted state
 
 После прогонов по стратегиям проверить:
 
 1. В корне состояния есть:
+- `shortTerm`
+- `working`
+- `longTerm`
+
+2. Внутри `shortTerm` есть:
 - `messages`
 - `strategyState`
 
-2. Для stateful стратегий `strategyState` сериализуется как отдельный тип:
+3. Для stateful стратегий `shortTerm.strategyState` сериализуется как отдельный тип:
 - `summary_compression`
 - `sticky_facts`
 - `branching`
 
-3. Для простых стратегий:
+4. Для простых стратегий:
 - `no_compression`
 - `sliding_window`
 
-`strategyState` отсутствует или равен `null`.
+`shortTerm.strategyState` отсутствует или равен `null`.
 
-4. Нет старого общего metadata-слоя.
+5. `working.notes` и `longTerm.notes` сериализуются отдельно от short-term контекста.
+
+6. Нет старого верхнеуровневого формата с `messages` и `strategyState`.
 
 ## Критерий успешного smoke-check
 

@@ -1,6 +1,7 @@
-﻿package agent.memory
+package agent.memory
 
 import agent.memory.model.MemoryState
+import agent.memory.model.ShortTermMemory
 import agent.memory.strategy.nocompression.NoCompressionMemoryStrategy
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,7 +19,11 @@ class NoCompressionMemoryStrategyTest {
             ChatMessage(role = ChatRole.ASSISTANT, content = "assistant")
         )
 
-        assertEquals(messages, strategy.effectiveContext(MemoryState(messages = messages)))
+        assertEquals(
+            messages,
+            strategy.effectiveContext(
+                MemoryState(shortTerm = ShortTermMemory(messages = messages))
+            )
+        )
     }
 }
-
