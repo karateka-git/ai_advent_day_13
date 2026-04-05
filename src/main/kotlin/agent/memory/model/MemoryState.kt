@@ -14,23 +14,25 @@ enum class MemoryLayer {
 /**
  * Краткая единица явно сохранённой рабочей или долговременной памяти.
  *
+ * @property id устойчивый идентификатор заметки внутри persisted state.
  * @property category доменная категория заметки, например `goal` или `communication_style`.
  * @property content нормализованное текстовое содержимое заметки.
  */
 data class MemoryNote(
+    val id: String,
     val category: String,
     val content: String
-)
+) {
+    constructor(category: String, content: String) : this(
+        id = "",
+        category = category,
+        content = content
+    )
+}
 
 /**
  * Краткосрочная память: сырой журнал текущей сессии и его представление,
  * вычисленное активной short-term стратегией.
- *
- * @property rawMessages полный журнал short-term переписки, который служит
- * источником истины для пересборки стратегии.
- * @property derivedMessages short-term представление, вычисленное активной
- * стратегией из сырого журнала.
- * @property strategyState strategy-specific состояние активной short-term стратегии.
  */
 data class ShortTermMemory(
     val rawMessages: List<ChatMessage> = emptyList(),
@@ -40,8 +42,6 @@ data class ShortTermMemory(
 
 /**
  * Рабочая память: данные текущей задачи.
- *
- * @property notes список заметок, полезных для выполнения текущей задачи.
  */
 data class WorkingMemory(
     val notes: List<MemoryNote> = emptyList()
@@ -49,8 +49,6 @@ data class WorkingMemory(
 
 /**
  * Долговременная память: устойчивые предпочтения, договорённости и знания.
- *
- * @property notes список устойчивых заметок, полезных в будущих диалогах.
  */
 data class LongTermMemory(
     val notes: List<MemoryNote> = emptyList()
@@ -59,14 +57,12 @@ data class LongTermMemory(
 /**
  * Полный in-memory снимок памяти ассистента с явным разделением по слоям.
  *
- * @property shortTerm краткосрочная память с сырым журналом и derived-представлением стратегии.
- * @property working рабочая память текущей задачи.
- * @property longTerm долговременная память пользователя и проекта.
- * @property pending кандидаты на сохранение, ожидающие подтверждения пользователя.
+ * @property nextNoteId следующий числовой идентификатор для новой durable-заметки.
  */
 data class MemoryState(
     val shortTerm: ShortTermMemory = ShortTermMemory(),
     val working: WorkingMemory = WorkingMemory(),
     val longTerm: LongTermMemory = LongTermMemory(),
-    val pending: PendingMemoryState = PendingMemoryState()
+    val pending: PendingMemoryState = PendingMemoryState(),
+    val nextNoteId: Long = 1
 )

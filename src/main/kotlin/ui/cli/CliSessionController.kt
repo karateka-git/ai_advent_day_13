@@ -3,6 +3,7 @@ package ui.cli
 import agent.capability.capability
 import agent.core.Agent
 import agent.lifecycle.AgentLifecycleListener
+import agent.memory.model.ManagedMemoryNoteEdit
 import agent.memory.model.MemoryLayer
 import agent.memory.model.PendingMemoryEdit
 import agent.memory.strategy.MemoryStrategyOption
@@ -10,6 +11,8 @@ import agent.memory.strategy.MemoryStrategyType
 import agent.memory.strategy.branching.BranchingCapability
 import app.output.AppEvent
 import app.output.AppEventSink
+import app.output.HelpCommandDescriptor
+import app.output.HelpCommandGroup
 import java.net.http.HttpClient
 import java.util.Properties
 import llm.core.LanguageModel
@@ -49,7 +52,7 @@ class CliSessionController(
                 appEventSink.emit(
                     AppEvent.CommandsAvailable(
                         title = "Доступные команды",
-                        commands = GeneralCliCatalog.helpCommands
+                        groups = GeneralCliCatalog.helpGroups
                     )
                 )
                 CliSessionControllerResult.Continue
@@ -86,6 +89,16 @@ class CliSessionController(
                     AppEvent.MemoryStateAvailable(
                         snapshot = state.agent.inspectMemory(),
                         selectedLayer = command.layer
+                    )
+                )
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.ShowMemoryCategories -> {
+                appEventSink.emit(
+                    AppEvent.CommandsAvailable(
+                        title = "Категории памяти",
+                        groups = memoryCategoryGroups(command.layer)
                     )
                 )
                 CliSessionControllerResult.Continue
@@ -159,6 +172,48 @@ class CliSessionController(
                         AppEvent.PendingMemoryActionCompleted(
                             message = "Pending-кандидат ${command.id} обновлён.",
                             pending = updatedPending
+                        )
+                    )
+                } catch (error: Exception) {
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
+                }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.AddMemoryNote -> {
+                try {
+                    val result = state.agent.addMemoryNote(command.layer, command.category, command.content)
+                    appEventSink.emit(
+                        AppEvent.CommandCompleted(
+                            "Добавлена заметка ${result.note.id} в слой ${layerLabel(command.layer)}."
+                        )
+                    )
+                } catch (error: Exception) {
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
+                }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.EditMemoryNote -> {
+                try {
+                    val result = state.agent.editMemoryNote(command.layer, command.id, command.edit)
+                    appEventSink.emit(
+                        AppEvent.CommandCompleted(
+                            "Заметка ${result.note.id} в слое ${layerLabel(command.layer)} обновлена."
+                        )
+                    )
+                } catch (error: Exception) {
+                    appEventSink.emit(AppEvent.RequestFailed(error.message))
+                }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.DeleteMemoryNote -> {
+                try {
+                    val result = state.agent.deleteMemoryNote(command.layer, command.id)
+                    appEventSink.emit(
+                        AppEvent.CommandCompleted(
+                            "Заметка ${result.note.id} удалена из слоя ${layerLabel(command.layer)}."
                         )
                     )
                 } catch (error: Exception) {
@@ -301,8 +356,36 @@ class CliSessionController(
             else -> error("Для pending-кандидата поддерживаются только слои working и long.")
         }
 
+    private fun memoryCategoryGroups(layer: MemoryLayer?): List<HelpCommandGroup> {
+        val layers = layer?.let(::listOf) ?: listOf(MemoryLayer.WORKING, MemoryLayer.LONG_TERM)
+        return layers.map { selectedLayer ->
+            HelpCommandGroup(
+                title = "Категории слоя ${layerLabel(selectedLayer)}",
+                commands = state.agent.memoryCategories(selectedLayer).map { category ->
+                    HelpCommandDescriptor("/memory add ${layerCommandValue(selectedLayer)} $category <текст>", category)
+                }
+            )
+        }
+    }
+
+    private fun layerCommandValue(layer: MemoryLayer): String =
+        when (layer) {
+            MemoryLayer.WORKING -> "working"
+            MemoryLayer.LONG_TERM -> "long"
+            MemoryLayer.SHORT_TERM -> "short"
+        }
+
+    private fun layerLabel(layer: MemoryLayer): String =
+        when (layer) {
+            MemoryLayer.WORKING -> "рабочая память"
+            MemoryLayer.LONG_TERM -> "долговременная память"
+            MemoryLayer.SHORT_TERM -> "краткосрочная память"
+        }
+
     private fun formatInvalidCommandReason(reason: InvalidCliCommandReason): String =
         when (reason) {
+            is InvalidCliCommandReason.UnknownCommand ->
+                "Неизвестная команда: ${reason.command}. Для списка команд используйте ${CliCommands.HELP}."
             is InvalidCliCommandReason.Usage -> "Используйте: ${reason.usage}."
             is InvalidCliCommandReason.PendingEditUnsupportedField -> {
                 val supportedFields = reason.allowedFields.joinToString(", ")

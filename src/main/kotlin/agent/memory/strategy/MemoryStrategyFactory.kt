@@ -9,6 +9,7 @@ import agent.memory.strategy.stickyfacts.StickyFactsMemoryStrategy
 import agent.memory.strategy.summary.LlmConversationSummarizer
 import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
 import llm.core.LanguageModel
+import ui.cli.CliCommands
 
 /**
  * Создаёт стратегии памяти, которые можно выбрать в рамках CLI-сессии.
@@ -63,19 +64,19 @@ object MemoryStrategyFactory {
                         "и переключаться между ними в рамках одной модели.",
                 additionalCommands = listOf(
                     MemoryStrategyCommandHelp(
-                        command = "checkpoint [name]",
+                        command = "${CliCommands.CHECKPOINT} [name]",
                         description = "Создаёт checkpoint текущего состояния диалога."
                     ),
                     MemoryStrategyCommandHelp(
-                        command = "branches",
+                        command = CliCommands.BRANCHES,
                         description = "Показывает активную ветку, последний checkpoint и список веток."
                     ),
                     MemoryStrategyCommandHelp(
-                        command = "branch create <name>",
+                        command = "${CliCommands.BRANCH} create <name>",
                         description = "Создаёт новую ветку от последнего checkpoint."
                     ),
                     MemoryStrategyCommandHelp(
-                        command = "branch use <name>",
+                        command = "${CliCommands.BRANCH} use <name>",
                         description = "Переключает диалог на выбранную ветку."
                     )
                 )

@@ -2,6 +2,9 @@ package agent.core
 
 import agent.capability.AgentCapability
 import agent.format.ResponseFormat
+import agent.memory.model.ManagedMemoryNoteEdit
+import agent.memory.model.ManagedMemoryNoteResult
+import agent.memory.model.MemoryLayer
 import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.memory.model.PendingMemoryActionResult
@@ -71,6 +74,26 @@ interface Agent<T> {
      * Редактирует pending-кандидат перед подтверждением.
      */
     fun editPendingMemory(candidateId: String, edit: PendingMemoryEdit): PendingMemoryState
+
+    /**
+     * Возвращает допустимые категории заметок для выбранного durable memory слоя.
+     */
+    fun memoryCategories(layer: MemoryLayer): List<String>
+
+    /**
+     * Добавляет заметку в выбранный durable memory слой.
+     */
+    fun addMemoryNote(layer: MemoryLayer, category: String, content: String): ManagedMemoryNoteResult
+
+    /**
+     * Редактирует уже сохранённую durable-заметку.
+     */
+    fun editMemoryNote(layer: MemoryLayer, noteId: String, edit: ManagedMemoryNoteEdit): ManagedMemoryNoteResult
+
+    /**
+     * Удаляет заметку из выбранного durable memory слоя.
+     */
+    fun deleteMemoryNote(layer: MemoryLayer, noteId: String): ManagedMemoryNoteResult
 
     /**
      * Возвращает дополнительную capability текущего агента, если она поддерживается.

@@ -9,13 +9,18 @@ import agent.memory.layer.DurableMemoryCandidateApplier
 import agent.memory.layer.MemoryCandidateApplier
 import agent.memory.layer.MemoryCandidateValidator
 import agent.memory.layer.MemoryConfirmationPolicy
+import agent.memory.layer.MemoryLayerCategories
 import agent.memory.layer.MemoryLayerAllocator
 import agent.memory.layer.MemoryLayerWritePolicy
 import agent.memory.layer.RuleBasedMemoryLayerAllocator
 import agent.memory.layer.RuleBasedMemoryNoteMergePolicy
 import agent.memory.layer.UserMessageOnlyMemoryLayerWritePolicy
+import agent.memory.model.LongTermMemory
+import agent.memory.model.ManagedMemoryNoteEdit
+import agent.memory.model.ManagedMemoryNoteResult
 import agent.memory.model.MemoryCandidateDraft
 import agent.memory.model.MemoryLayer
+import agent.memory.model.MemoryNote
 import agent.memory.model.MemorySnapshot
 import agent.memory.model.MemoryState
 import agent.memory.model.PendingMemoryActionResult
@@ -23,6 +28,7 @@ import agent.memory.model.PendingMemoryCandidate
 import agent.memory.model.PendingMemoryEdit
 import agent.memory.model.PendingMemoryState
 import agent.memory.model.ShortTermMemory
+import agent.memory.model.WorkingMemory
 import agent.memory.persistence.JsonMemoryStateRepository
 import agent.memory.persistence.MemoryStateRepository
 import agent.memory.prompt.DefaultMemoryContextService
@@ -166,7 +172,7 @@ class DefaultMemoryManager(
     override fun editPendingMemory(candidateId: String, edit: PendingMemoryEdit): PendingMemoryState {
         val existing = state.pending.candidates.firstOrNull { it.id == candidateId }
             ?: error("Pending-кандидат '$candidateId' не найден.")
-        val updatedCandidate = applyEdit(existing, edit)
+        val updatedCandidate = applyPendingEdit(existing, edit)
         candidateValidator.validateEditedCandidate(toDraft(updatedCandidate))
 
         state = state.copy(
@@ -178,6 +184,77 @@ class DefaultMemoryManager(
         )
         saveState()
         return state.pending
+    }
+
+    override fun memoryCategories(layer: MemoryLayer): List<String> {
+        require(layer != MemoryLayer.SHORT_TERM) {
+            "Ручные категории доступны только для слоёв working и long."
+        }
+        return MemoryLayerCategories.definitionsFor(layer).map { it.id }
+    }
+
+    override fun addMemoryNote(layer: MemoryLayer, category: String, content: String): ManagedMemoryNoteResult {
+        validateManagedNoteInput(layer, category, content)
+        val note = MemoryNote(
+            id = "n${state.nextNoteId}",
+            category = category.trim(),
+            content = content.trim()
+        )
+        val updatedState = when (layer) {
+            MemoryLayer.WORKING -> state.copy(
+                working = state.working.copy(notes = state.working.notes + note),
+                nextNoteId = state.nextNoteId + 1
+            )
+            MemoryLayer.LONG_TERM -> state.copy(
+                longTerm = state.longTerm.copy(notes = state.longTerm.notes + note),
+                nextNoteId = state.nextNoteId + 1
+            )
+            MemoryLayer.SHORT_TERM -> error("Нельзя вручную добавлять заметки в short-term.")
+        }
+        saveState(updatedState)
+        return ManagedMemoryNoteResult(note = note, state = state)
+    }
+
+    override fun editMemoryNote(layer: MemoryLayer, noteId: String, edit: ManagedMemoryNoteEdit): ManagedMemoryNoteResult {
+        require(layer != MemoryLayer.SHORT_TERM) {
+            "Нельзя вручную редактировать заметки short-term."
+        }
+
+        val existing = notesFor(layer).firstOrNull { it.id == noteId }
+            ?: error("Заметка '$noteId' не найдена в слое ${layer.name.lowercase()}.")
+
+        val updated = when (edit) {
+            is ManagedMemoryNoteEdit.UpdateText -> {
+                require(edit.content.isNotBlank()) { "Текст заметки не должен быть пустым." }
+                existing.copy(content = edit.content.trim())
+            }
+            is ManagedMemoryNoteEdit.UpdateCategory -> {
+                validateManagedCategory(layer, edit.category)
+                existing.copy(category = edit.category.trim())
+            }
+        }
+
+        val updatedState = updateNotes(
+            layer = layer,
+            notes = notesFor(layer).map { if (it.id == noteId) updated else it }
+        )
+        saveState(updatedState)
+        return ManagedMemoryNoteResult(note = updated, state = state)
+    }
+
+    override fun deleteMemoryNote(layer: MemoryLayer, noteId: String): ManagedMemoryNoteResult {
+        require(layer != MemoryLayer.SHORT_TERM) {
+            "Нельзя вручную удалять заметки short-term."
+        }
+
+        val existing = notesFor(layer).firstOrNull { it.id == noteId }
+            ?: error("Заметка '$noteId' не найдена в слое ${layer.name.lowercase()}.")
+        val updatedState = updateNotes(
+            layer = layer,
+            notes = notesFor(layer).filterNot { it.id == noteId }
+        )
+        saveState(updatedState)
+        return ManagedMemoryNoteResult(note = existing, state = state)
     }
 
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? =
@@ -340,7 +417,7 @@ class DefaultMemoryManager(
         return selected to remaining
     }
 
-    private fun applyEdit(candidate: PendingMemoryCandidate, edit: PendingMemoryEdit): PendingMemoryCandidate =
+    private fun applyPendingEdit(candidate: PendingMemoryCandidate, edit: PendingMemoryEdit): PendingMemoryCandidate =
         when (edit) {
             is PendingMemoryEdit.UpdateText -> candidate.copy(content = edit.content.trim())
             is PendingMemoryEdit.UpdateLayer -> candidate.copy(targetLayer = edit.targetLayer)
@@ -353,4 +430,35 @@ class DefaultMemoryManager(
             category = candidate.category,
             content = candidate.content
         )
+
+    private fun validateManagedNoteInput(layer: MemoryLayer, category: String, content: String) {
+        require(layer != MemoryLayer.SHORT_TERM) {
+            "Нельзя вручную добавлять заметки в short-term."
+        }
+        require(content.isNotBlank()) {
+            "Текст заметки не должен быть пустым."
+        }
+        validateManagedCategory(layer, category)
+    }
+
+    private fun validateManagedCategory(layer: MemoryLayer, category: String) {
+        val normalizedCategory = category.trim()
+        require(MemoryLayerCategories.isCategoryAllowed(layer, normalizedCategory)) {
+            "Категория '$normalizedCategory' недоступна для слоя ${layer.name.lowercase()}."
+        }
+    }
+
+    private fun notesFor(layer: MemoryLayer): List<MemoryNote> =
+        when (layer) {
+            MemoryLayer.WORKING -> state.working.notes
+            MemoryLayer.LONG_TERM -> state.longTerm.notes
+            MemoryLayer.SHORT_TERM -> emptyList()
+        }
+
+    private fun updateNotes(layer: MemoryLayer, notes: List<MemoryNote>): MemoryState =
+        when (layer) {
+            MemoryLayer.WORKING -> state.copy(working = WorkingMemory(notes = notes))
+            MemoryLayer.LONG_TERM -> state.copy(longTerm = LongTermMemory(notes = notes))
+            MemoryLayer.SHORT_TERM -> state
+        }
 }

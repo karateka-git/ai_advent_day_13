@@ -2,10 +2,13 @@ package agent.memory.core
 
 import agent.capability.AgentCapability
 import agent.core.AgentTokenStats
+import agent.memory.model.ManagedMemoryNoteEdit
+import agent.memory.model.ManagedMemoryNoteResult
 import agent.memory.model.PendingMemoryState
 import agent.memory.model.PendingMemoryActionResult
 import agent.memory.model.PendingMemoryEdit
 import agent.memory.model.MemorySnapshot
+import agent.memory.model.MemoryLayer
 import agent.memory.model.MemoryState
 import java.nio.file.Path
 import llm.core.model.ChatMessage
@@ -100,6 +103,26 @@ interface MemoryManager {
      * @return обновлённая очередь pending-кандидатов и количество затронутых кандидатов.
      */
     fun editPendingMemory(candidateId: String, edit: PendingMemoryEdit): PendingMemoryState
+
+    /**
+     * Возвращает допустимые категории заметок для указанного durable memory слоя.
+     */
+    fun memoryCategories(layer: MemoryLayer): List<String>
+
+    /**
+     * Добавляет заметку в выбранный durable memory слой.
+     */
+    fun addMemoryNote(layer: MemoryLayer, category: String, content: String): ManagedMemoryNoteResult
+
+    /**
+     * Редактирует уже сохранённую durable-заметку.
+     */
+    fun editMemoryNote(layer: MemoryLayer, noteId: String, edit: ManagedMemoryNoteEdit): ManagedMemoryNoteResult
+
+    /**
+     * Удаляет заметку из выбранного durable memory слоя.
+     */
+    fun deleteMemoryNote(layer: MemoryLayer, noteId: String): ManagedMemoryNoteResult
 
     /**
      * Возвращает capability активной стратегии памяти, если она поддерживается.

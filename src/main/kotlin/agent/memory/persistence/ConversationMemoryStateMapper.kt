@@ -27,9 +27,6 @@ class ConversationMemoryStateMapper(
 ) {
     /**
      * Преобразует persisted state в runtime state.
-     *
-     * @param storedState persisted-снимок памяти из JSON.
-     * @return runtime-снимок layered memory.
      */
     fun toRuntime(storedState: ConversationMemoryState): MemoryState =
         MemoryState(
@@ -47,14 +44,12 @@ class ConversationMemoryStateMapper(
             pending = PendingMemoryState(
                 candidates = storedState.pending.candidates.map(::toRuntimeCandidate),
                 nextId = storedState.pending.nextId
-            )
+            ),
+            nextNoteId = storedState.nextNoteId
         )
 
     /**
      * Преобразует runtime state в persisted state.
-     *
-     * @param runtimeState текущее runtime-состояние памяти.
-     * @return JSON-совместимая storage-модель памяти.
      */
     fun toStored(runtimeState: MemoryState): ConversationMemoryState =
         ConversationMemoryState(
@@ -72,17 +67,20 @@ class ConversationMemoryStateMapper(
             pending = StoredPendingMemoryState(
                 candidates = runtimeState.pending.candidates.map(::toStoredCandidate),
                 nextId = runtimeState.pending.nextId
-            )
+            ),
+            nextNoteId = runtimeState.nextNoteId
         )
 
     private fun toRuntimeNote(note: StoredMemoryNote): MemoryNote =
         MemoryNote(
+            id = note.id,
             category = note.category,
             content = note.content
         )
 
     private fun toStoredNote(note: MemoryNote): StoredMemoryNote =
         StoredMemoryNote(
+            id = note.id,
             category = note.category,
             content = note.content
         )

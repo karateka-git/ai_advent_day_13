@@ -1,12 +1,14 @@
 package ui.cli
 
 import agent.memory.model.MemoryLayer
+import agent.memory.model.MemoryNote
 import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.memory.strategy.MemoryStrategyOption
 import app.output.AppEvent
 import app.output.AppEventSink
 import app.output.HelpCommandDescriptor
+import app.output.HelpCommandGroup
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
 
@@ -29,7 +31,7 @@ class CliRenderer(
                 )
             }
 
-            is AppEvent.CommandsAvailable -> renderCommandsBlock(event.title, event.commands)
+            is AppEvent.CommandsAvailable -> renderCommandsBlock(event.title, event.groups)
 
             is AppEvent.MemoryStrategySelectionRequested -> {
                 renderBorderedBlock(
@@ -110,7 +112,12 @@ class CliRenderer(
             is AppEvent.PendingMemoryCommandsAvailable -> {
                 renderCommandsBlock(
                     title = "Команды для pending-памяти",
-                    commands = event.commands
+                    groups = listOf(
+                        HelpCommandGroup(
+                            title = "Pending-память",
+                            commands = event.commands
+                        )
+                    )
                 )
             }
 
@@ -178,10 +185,9 @@ class CliRenderer(
 
             is AppEvent.TokenPreviewAvailable -> {
                 tokenStatsFormatter.formatPreview(event.tokenStats)?.let { preview ->
-                    val lines = preview.lines().drop(1)
                     renderBorderedBlock(
                         title = "Оценка перед запросом",
-                        lines = lines
+                        lines = preview.lines().drop(1)
                     )
                 }
             }
@@ -189,6 +195,7 @@ class CliRenderer(
             AppEvent.ContextCleared -> printCommandResult("Контекст очищен. Системное сообщение сохранено.")
             AppEvent.ModelChanged -> printCommandResult("Текущая модель изменена.")
             is AppEvent.ModelSwitchFailed -> printCommandResult("Не удалось переключить модель: ${event.details}")
+            is AppEvent.CommandCompleted -> printCommandResult(event.message)
             is AppEvent.RequestFailed -> printCommandResult("Не удалось выполнить запрос: ${event.details}")
             AppEvent.SessionFinished -> printCommandResult("Чат завершён.")
             AppEvent.ModelWarmupStarted -> loadingIndicator.start("Подготовка модели")
@@ -256,11 +263,17 @@ class CliRenderer(
         )
     }
 
-    private fun renderCommandsBlock(title: String, commands: List<HelpCommandDescriptor>) {
+    private fun renderCommandsBlock(title: String, groups: List<HelpCommandGroup>) {
         val lines = buildList {
-            commands.forEach { descriptor ->
-                add(descriptor.command)
-                add("  ${descriptor.description}")
+            groups.forEachIndexed { index, group ->
+                if (index > 0) {
+                    add("")
+                }
+                add(group.title)
+                group.commands.forEach { descriptor ->
+                    add("  ${descriptor.command}")
+                    add("    ${descriptor.description}")
+                }
             }
         }
 
@@ -307,8 +320,8 @@ class CliRenderer(
     private fun linesForLayer(snapshot: MemorySnapshot, layer: MemoryLayer): List<String> =
         when (layer) {
             MemoryLayer.SHORT_TERM -> buildShortTermLines(snapshot)
-            MemoryLayer.WORKING -> snapshot.state.working.notes.map { "${noteCategoryTitle(it.category)}: ${it.content}" }
-            MemoryLayer.LONG_TERM -> snapshot.state.longTerm.notes.map { "${noteCategoryTitle(it.category)}: ${it.content}" }
+            MemoryLayer.WORKING -> snapshot.state.working.notes.map(::formatManagedNote)
+            MemoryLayer.LONG_TERM -> snapshot.state.longTerm.notes.map(::formatManagedNote)
         }
 
     private fun buildShortTermLines(snapshot: MemorySnapshot): List<String> {
@@ -319,6 +332,9 @@ class CliRenderer(
                 .filterNot { it.role == ChatRole.SYSTEM }
                 .map(::formatMessageLine)
     }
+
+    private fun formatManagedNote(note: MemoryNote): String =
+        "${note.id} [${noteCategoryTitle(note.category)}]: ${note.content}"
 
     private fun formatMessageLine(message: ChatMessage): String =
         buildString {

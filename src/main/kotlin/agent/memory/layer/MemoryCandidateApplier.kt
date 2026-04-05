@@ -31,12 +31,19 @@ class DurableMemoryCandidateApplier(
             return state
         }
 
+        val notesByDraftIndex = candidates.mapIndexed { index, candidate ->
+            candidate to MemoryNote(
+                id = "n${state.nextNoteId + index}",
+                category = candidate.category,
+                content = candidate.content
+            )
+        }
         val workingAdditions = candidates
             .filter { it.targetLayer == MemoryLayer.WORKING }
-            .map(::toMemoryNote)
+            .map { draft -> notesByDraftIndex.first { it.first === draft }.second }
         val longTermAdditions = candidates
             .filter { it.targetLayer == MemoryLayer.LONG_TERM }
-            .map(::toMemoryNote)
+            .map { draft -> notesByDraftIndex.first { it.first === draft }.second }
 
         return state.copy(
             working = WorkingMemory(
@@ -44,13 +51,8 @@ class DurableMemoryCandidateApplier(
             ),
             longTerm = LongTermMemory(
                 notes = noteMergePolicy.merge(state.longTerm.notes, longTermAdditions)
-            )
+            ),
+            nextNoteId = state.nextNoteId + candidates.size
         )
     }
-
-    private fun toMemoryNote(candidate: agent.memory.model.MemoryCandidateDraft): MemoryNote =
-        MemoryNote(
-            category = candidate.category,
-            content = candidate.content
-        )
 }

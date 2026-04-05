@@ -136,7 +136,7 @@ class LlmConversationMemoryLayerAllocationExtractor(
             val category = payload.category.trim()
             val content = payload.content.trim()
             if (category in allowedCategories && content.isNotBlank()) {
-                MemoryNote(category = category, content = content)
+                MemoryNote(id = "", category = category, content = content)
             } else {
                 null
             }

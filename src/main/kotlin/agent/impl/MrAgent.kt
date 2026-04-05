@@ -14,6 +14,9 @@ import agent.memory.core.MemoryManager
 import agent.memory.core.MemoryStrategy
 import agent.memory.layer.MemoryLayerAllocator
 import agent.memory.layer.RuleBasedMemoryLayerAllocator
+import agent.memory.model.ManagedMemoryNoteEdit
+import agent.memory.model.ManagedMemoryNoteResult
+import agent.memory.model.MemoryLayer
 import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryActionResult
 import agent.memory.model.PendingMemoryEdit
@@ -103,6 +106,18 @@ class MrAgent(
 
     override fun editPendingMemory(candidateId: String, edit: PendingMemoryEdit): PendingMemoryState =
         memoryManager.editPendingMemory(candidateId, edit)
+
+    override fun memoryCategories(layer: MemoryLayer): List<String> =
+        memoryManager.memoryCategories(layer)
+
+    override fun addMemoryNote(layer: MemoryLayer, category: String, content: String): ManagedMemoryNoteResult =
+        memoryManager.addMemoryNote(layer, category, content)
+
+    override fun editMemoryNote(layer: MemoryLayer, noteId: String, edit: ManagedMemoryNoteEdit): ManagedMemoryNoteResult =
+        memoryManager.editMemoryNote(layer, noteId, edit)
+
+    override fun deleteMemoryNote(layer: MemoryLayer, noteId: String): ManagedMemoryNoteResult =
+        memoryManager.deleteMemoryNote(layer, noteId)
 
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? =
         memoryManager.capability(capabilityType)

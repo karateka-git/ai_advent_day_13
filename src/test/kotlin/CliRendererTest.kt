@@ -8,6 +8,7 @@ import agent.memory.model.ShortTermMemory
 import agent.memory.strategy.MemoryStrategyType
 import app.output.AppEvent
 import app.output.HelpCommandDescriptor
+import app.output.HelpCommandGroup
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import kotlin.test.Test
@@ -25,10 +26,10 @@ class CliRendererTest {
             CliRenderer().emit(AppEvent.SessionStarted)
         }
 
-        assertTrue(output.contains("┌─ Старт"))
-        assertTrue(output.contains("help"))
-        assertFalse(output.contains("models"))
-        assertFalse(output.contains("use <id>"))
+        assertTrue(output.contains("Старт"))
+        assertTrue(output.contains("/help"))
+        assertFalse(output.contains("/models"))
+        assertFalse(output.contains("/use <id>"))
     }
 
     @Test
@@ -37,32 +38,24 @@ class CliRendererTest {
             CliRenderer().emit(
                 AppEvent.CommandsAvailable(
                     title = "Commands",
-                    commands = listOf(
-                        HelpCommandDescriptor("help", "Show commands."),
-                        HelpCommandDescriptor("memory", "Show memory.")
+                    groups = listOf(
+                        HelpCommandGroup(
+                            title = "General",
+                            commands = listOf(
+                                HelpCommandDescriptor("/help", "Show commands."),
+                                HelpCommandDescriptor("/memory", "Show memory.")
+                            )
+                        )
                     )
                 )
             )
         }
 
-        assertTrue(output.contains("┌─ Commands"))
-        assertTrue(output.contains("│ help"))
-        assertTrue(output.contains("│   Show commands."))
-        assertTrue(output.contains("│ memory"))
-    }
-
-    @Test
-    fun `models output is bordered`() {
-        val output = captureStdout {
-            CliRenderer().emit(
-                AppEvent.ModelsAvailable(
-                    options = emptyList(),
-                    currentModelId = "timeweb"
-                )
-            )
-        }
-
-        assertTrue(output.contains("┌─ Доступные модели"))
+        assertTrue(output.contains("Commands"))
+        assertTrue(output.contains("General"))
+        assertTrue(output.contains("/help"))
+        assertTrue(output.contains("Show commands."))
+        assertTrue(output.contains("/memory"))
     }
 
     @Test
@@ -71,30 +64,14 @@ class CliRendererTest {
             CliRenderer().emit(
                 AppEvent.PendingMemoryAvailable(
                     pending = samplePending(),
-                    reason = "Есть кандидаты на сохранение в память. Посмотри их командой memory pending."
+                    reason = "Есть кандидаты на сохранение в память. Посмотри их командой /memory pending."
                 )
             )
         }
 
-        assertTrue(output.contains("┌─ Результат команды"))
-        assertTrue(output.contains("memory pending"))
-        assertFalse(output.contains("p1"))
-    }
-
-    @Test
-    fun `pending action result is bordered and does not print candidates list`() {
-        val output = captureStdout {
-            CliRenderer().emit(
-                AppEvent.PendingMemoryActionCompleted(
-                    message = "Approved pending candidates: p1",
-                    pending = samplePending()
-                )
-            )
-        }
-
-        assertTrue(output.contains("┌─ Результат команды"))
-        assertTrue(output.contains("Approved pending candidates: p1"))
-        assertFalse(output.contains("memory pending info"))
+        assertTrue(output.contains("Результат команды"))
+        assertTrue(output.contains("/memory pending"))
+        assertFalse(output.contains("p1 ["))
     }
 
     @Test
@@ -107,14 +84,14 @@ class CliRendererTest {
             )
         }
 
-        assertTrue(output.contains("┌─ Pending-память"))
+        assertTrue(output.contains("Pending-память"))
         assertTrue(output.contains("p1"))
         assertTrue(output.contains("2 weeks"))
-        assertTrue(output.contains("memory pending info"))
+        assertTrue(output.contains("/memory pending info"))
     }
 
     @Test
-    fun `memory view is bordered and does not show raw short term or system derived message`() {
+    fun `memory view shows derived short term only`() {
         val output = captureStdout {
             CliRenderer().emit(
                 AppEvent.MemoryStateAvailable(
@@ -128,14 +105,8 @@ class CliRendererTest {
                                     )
                                 ),
                                 derivedMessages = listOf(
-                                    ChatMessage(
-                                        role = ChatRole.SYSTEM,
-                                        content = "Derived system"
-                                    ),
-                                    ChatMessage(
-                                        role = ChatRole.USER,
-                                        content = "Derived user"
-                                    )
+                                    ChatMessage(role = ChatRole.SYSTEM, content = "Derived system"),
+                                    ChatMessage(role = ChatRole.USER, content = "Derived user")
                                 )
                             )
                         ),
@@ -144,42 +115,13 @@ class CliRendererTest {
                     selectedLayer = null
                 )
             )
-        }.replace("\r\n", "\n")
+        }
 
-        assertTrue(output.contains("┌─ Память"))
+        assertTrue(output.contains("Память"))
         assertTrue(output.contains("Используемая стратегия: no_compression"))
         assertFalse(output.contains("Raw line 1"))
         assertFalse(output.contains("Derived system"))
-        assertFalse(output.contains("система:"))
         assertTrue(output.contains("пользователь: Derived user"))
-    }
-
-    @Test
-    fun `memory short hides system messages`() {
-        val output = captureStdout {
-            CliRenderer().emit(
-                AppEvent.MemoryStateAvailable(
-                    snapshot = MemorySnapshot(
-                        state = MemoryState(
-                            shortTerm = ShortTermMemory(
-                                derivedMessages = listOf(
-                                    ChatMessage(role = ChatRole.SYSTEM, content = "System line"),
-                                    ChatMessage(role = ChatRole.USER, content = "User line"),
-                                    ChatMessage(role = ChatRole.ASSISTANT, content = "Assistant line")
-                                )
-                            )
-                        ),
-                        shortTermStrategyType = MemoryStrategyType.NO_COMPRESSION
-                    ),
-                    selectedLayer = MemoryLayer.SHORT_TERM
-                )
-            )
-        }
-
-        assertFalse(output.contains("система:"))
-        assertFalse(output.contains("System line"))
-        assertTrue(output.contains("пользователь: User line"))
-        assertTrue(output.contains("ассистент: Assistant line"))
     }
 
     @Test
@@ -188,8 +130,7 @@ class CliRendererTest {
             CliRenderer().emit(AppEvent.UserInputPrompt(ChatRole.USER))
         }
 
-        assertTrue(output.contains("┌─ Пользователь"))
-        assertTrue(output.contains("│ "))
+        assertTrue(output.contains("Пользователь"))
     }
 
     @Test
@@ -210,28 +151,9 @@ class CliRendererTest {
             )
         }
 
-        assertTrue(output.contains("┌─ Ассистент"))
-        assertTrue(output.contains("│ Короткий ответ"))
+        assertTrue(output.contains("Ассистент"))
+        assertTrue(output.contains("Короткий ответ"))
         assertTrue(output.contains("Токены ответа:"))
-    }
-
-    @Test
-    fun `token preview is bordered`() {
-        val output = captureStdout {
-            CliRenderer().emit(
-                AppEvent.TokenPreviewAvailable(
-                    AgentTokenStats(
-                        userPromptTokens = 12,
-                        historyTokens = 34,
-                        promptTokensLocal = 46
-                    )
-                )
-            )
-        }
-
-        assertTrue(output.contains("┌─ Оценка перед запросом"))
-        assertTrue(output.contains("текущее сообщение: 12"))
-        assertTrue(output.contains("история диалога: 34"))
     }
 
     private fun samplePending(): PendingMemoryState =

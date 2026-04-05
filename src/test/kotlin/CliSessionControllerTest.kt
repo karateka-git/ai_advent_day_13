@@ -7,7 +7,10 @@ import agent.format.ResponseFormat
 import agent.format.TextResponseFormat
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.NoOpAgentLifecycleListener
+import agent.memory.model.ManagedMemoryNoteEdit
+import agent.memory.model.ManagedMemoryNoteResult
 import agent.memory.model.MemoryLayer
+import agent.memory.model.MemoryNote
 import agent.memory.model.MemorySnapshot
 import agent.memory.model.MemoryState
 import agent.memory.model.PendingMemoryActionResult
@@ -18,6 +21,7 @@ import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
 import app.output.AppEvent
 import app.output.AppEventSink
+import app.output.HelpCommandGroup
 import java.net.http.HttpClient
 import java.nio.file.Path
 import java.util.Properties
@@ -49,14 +53,14 @@ class CliSessionControllerTest {
         val sink = RecordingAppEventSink()
         val controller = createController(sink = sink)
 
-        val result = controller.handle("help")
+        val result = controller.handle("/help")
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
             listOf<AppEvent>(
                 AppEvent.CommandsAvailable(
                     title = "Доступные команды",
-                    commands = GeneralCliCatalog.helpCommands
+                    groups = GeneralCliCatalog.helpGroups
                 )
             ),
             sink.events
@@ -68,7 +72,7 @@ class CliSessionControllerTest {
         val sink = RecordingAppEventSink()
         val controller = createController(sink = sink)
 
-        val result = controller.handle("memory long")
+        val result = controller.handle("/memory long")
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
@@ -87,7 +91,7 @@ class CliSessionControllerTest {
         val sink = RecordingAppEventSink()
         val controller = createController(sink = sink)
 
-        val result = controller.handle("memory pending")
+        val result = controller.handle("/memory pending")
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
@@ -105,7 +109,7 @@ class CliSessionControllerTest {
         val sink = RecordingAppEventSink()
         val controller = createController(sink = sink)
 
-        val result = controller.handle("memory pending info")
+        val result = controller.handle("/memory pending info")
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(
@@ -113,6 +117,22 @@ class CliSessionControllerTest {
                 AppEvent.PendingMemoryCommandsAvailable(
                     commands = PendingMemoryCliCatalog.helpCommands
                 )
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `adds memory note through current agent`() {
+        val sink = RecordingAppEventSink()
+        val controller = createController(sink = sink)
+
+        val result = controller.handle("/memory add working goal Собрать ТЗ")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.CommandCompleted("Добавлена заметка n1 в слой рабочая память.")
             ),
             sink.events
         )
@@ -150,7 +170,7 @@ class CliSessionControllerTest {
                 ),
                 AppEvent.PendingMemoryAvailable(
                     pending = FakeAgent.pendingMemory(),
-                    reason = "Есть кандидаты на сохранение в память. Посмотри их командой memory pending."
+                    reason = "Есть кандидаты на сохранение в память. Посмотри их командой /memory pending."
                 )
             ),
             sink.events
@@ -248,6 +268,31 @@ private class FakeAgent(
 
     override fun editPendingMemory(candidateId: String, edit: PendingMemoryEdit): PendingMemoryState =
         currentPendingState
+
+    override fun memoryCategories(layer: MemoryLayer): List<String> =
+        when (layer) {
+            MemoryLayer.WORKING -> listOf("goal", "constraint")
+            MemoryLayer.LONG_TERM -> listOf("communication_style")
+            MemoryLayer.SHORT_TERM -> emptyList()
+        }
+
+    override fun addMemoryNote(layer: MemoryLayer, category: String, content: String): ManagedMemoryNoteResult =
+        ManagedMemoryNoteResult(
+            note = MemoryNote(id = "n1", category = category, content = content),
+            state = memorySnapshot().state
+        )
+
+    override fun editMemoryNote(layer: MemoryLayer, noteId: String, edit: ManagedMemoryNoteEdit): ManagedMemoryNoteResult =
+        ManagedMemoryNoteResult(
+            note = MemoryNote(id = noteId, category = "goal", content = "Обновлённая заметка"),
+            state = memorySnapshot().state
+        )
+
+    override fun deleteMemoryNote(layer: MemoryLayer, noteId: String): ManagedMemoryNoteResult =
+        ManagedMemoryNoteResult(
+            note = MemoryNote(id = noteId, category = "goal", content = "Удалённая заметка"),
+            state = memorySnapshot().state
+        )
 
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? = null
 

@@ -25,6 +25,17 @@ data class HelpCommandDescriptor(
 )
 
 /**
+ * Группа CLI-команд для более читаемого help-экрана.
+ *
+ * @property title название смыслового блока.
+ * @property commands команды, входящие в этот блок.
+ */
+data class HelpCommandGroup(
+    val title: String,
+    val commands: List<HelpCommandDescriptor>
+)
+
+/**
  * Типизированные события application-слоя, которые описывают, что должно быть показано
  * пользователю, не привязывая приложение к конкретному UI.
  */
@@ -36,7 +47,7 @@ sealed interface AppEvent {
      */
     data class CommandsAvailable(
         val title: String,
-        val commands: List<HelpCommandDescriptor>
+        val groups: List<HelpCommandGroup>
     ) : AppEvent
 
     data class MemoryStrategySelectionRequested(
@@ -145,6 +156,10 @@ sealed interface AppEvent {
 
     data class RequestFailed(
         val details: String?
+    ) : AppEvent
+
+    data class CommandCompleted(
+        val message: String
     ) : AppEvent
 
     data object SessionFinished : AppEvent

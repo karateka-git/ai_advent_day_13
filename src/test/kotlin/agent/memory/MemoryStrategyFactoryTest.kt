@@ -121,10 +121,10 @@ class MemoryStrategyFactoryTest {
         val branchingCommands = optionsByType.getValue(MemoryStrategyType.BRANCHING).additionalCommands
         assertEquals(
             listOf(
-                "checkpoint [name]",
-                "branches",
-                "branch create <name>",
-                "branch use <name>"
+                "/checkpoint [name]",
+                "/branches",
+                "/branch create <name>",
+                "/branch use <name>"
             ),
             branchingCommands.map { it.command }
         )
