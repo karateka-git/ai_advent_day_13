@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$batPath = Join-Path $repoRoot "build\install\ai_advent_day_11\bin\ai_advent_day_11.bat"
+$batPath = Join-Path $repoRoot "build\install\ai_advent_day_12\bin\ai_advent_day_12.bat"
 $conversationsDir = Join-Path $repoRoot "config\conversations"
 
 if (-not (Test-Path -LiteralPath $batPath)) {
@@ -98,4 +98,5 @@ Write-Host "Exit code: $exitCode"
 if ($exitCode -ne 0) {
     throw "Scripted session finished with exit code $exitCode."
 }
+
 

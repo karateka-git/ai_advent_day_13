@@ -21,7 +21,7 @@
 ## Smoke-Check Проекта
 
 Для ручной проверки основной пользовательской функциональности проекта нужно использовать проектный сценарий:
-- [manual-smoke-checklist.md](/C:/Users/compadre/Downloads/Projects/AiAdvent/day_11/docs/manual-smoke-checklist.md)
+- [manual-smoke-checklist.md](/C:/Users/compadre/Downloads/Projects/AiAdvent/day_12/docs/manual-smoke-checklist.md)
 
 Правило для Codex:
 - если пользователь просит `проверить проект`, `прогнать основной сценарий`, `сделать smoke-check` или формулирует близкую просьбу без дополнительного уточнения, по умолчанию ориентироваться на этот чеклист;
@@ -40,7 +40,7 @@
 - после изменений в `Main.kt`, `scripts/run-scripted-session.ps1` или любой логике чтения/обработки консольного ввода scripted smoke-check нужно гонять только после повторного:
   - `.\gradlew.bat build`
   - `.\gradlew.bat installDist`
-- старый `build/install/ai_advent_day_11/bin/ai_advent_day_11.bat` после таких правок считать недостоверным для проверки сценариев;
+- старый `build/install/ai_advent_day_12/bin/ai_advent_day_12.bat` после таких правок считать недостоверным для проверки сценариев;
 - scripted smoke-check нельзя запускать параллельно: сценарии используют общий каталог `config/conversations`, и параллельный запуск приводит к блокировкам файлов и смешиванию результатов;
 - при проверке persisted state помнить ожидаемое поведение: `no_compression` и `sliding_window` не обязаны сохранять `strategyState`, а `summary`, `sticky_facts` и `branching` должны сохранять свой типизированный `strategyState`;
 - layered JSON в проекте считается разреженным:
