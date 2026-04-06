@@ -1,681 +1,271 @@
-﻿# ai_advent_day_11
+# day_11 — Явная модель памяти ассистента
 
-CLI-агент для диалога с LLM по HTTP API с сохранением истории, набором стратегий памяти и отдельным dev-режимом для сравнения этих стратегий на одном сценарии.
+`day_11` вырос из [day_10](C:/Users/compadre/Downloads/Projects/AiAdvent/day_10), где уже был CLI-агент с набором short-term стратегий памяти, сравнением стратегий и сохранением истории диалога.
 
-## Что умеет проект
+Главная задача этого этапа была другой: не просто хранить историю, а ввести **явную модель памяти ассистента**, где разные типы знаний разделены по смыслу и управляются отдельно.
 
-- запускать интерактивный чат в консоли;
-- переключать модель между `timeweb` и `huggingface`;
-- хранить историю диалога по моделям в JSON;
-- использовать 5 стратегий памяти:
-  - без сжатия;
-  - rolling summary;
-  - скользящее окно;
-  - sticky facts;
-  - ветки диалога;
-- показывать локальную оценку токенов перед запросом;
-- запускать отдельный comparison runner и сравнивать стратегии по:
-  - токенам;
-  - финальным ответам;
-  - judge-оценке качества, стабильности и удобства.
+Исходное задание:
 
-## Быстрый старт
+> День 11. Модель памяти ассистента
+>
+> Опишите и реализуйте модель памяти для ассистента.
+>
+> Разделите информацию минимум на 3 типа:
+>
+> - краткосрочная (текущий диалог)
+> - рабочая (данные текущей задачи)
+> - долговременная (профиль, решения, знания)
+>
+> Сделайте так, чтобы:
+>
+> - разные типы памяти хранились отдельно
+> - вы явно выбирали, что и куда сохраняется
+>
+> Проверьте:
+>
+> - какие данные попадают в каждый слой
+> - как это влияет на ответы ассистента
+>
+> Результат:
+>
+> Агент с явной моделью памяти (memory layers)
 
-1. Скопируйте `config/app.properties.example` в `config/app.properties`.
-2. Заполните токены для нужного провайдера.
-3. Соберите и запустите проект:
+## Что изменилось относительно `day_10`
 
-```powershell
-.\gradlew.bat build
-.\gradlew.bat installDist
-.\build\install\ai_advent_day_11\bin\ai_advent_day_11.bat
-```
+В `day_10` память в основном воспринималась как стратегия работы с историей диалога:
 
-Если нужен запуск в новом окне PowerShell:
+- без сжатия;
+- summary;
+- sliding window;
+- sticky facts;
+- branching.
 
-```powershell
-Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\Users\compadre\Downloads\Projects\AiAdvent\day_11''; .\build\install\ai_advent_day_11\bin\ai_advent_day_11.bat'
-```
+То есть основной вопрос был: **как подготовить short-term контекст для модели**.
 
-## Конфигурация
+В `day_11` поверх этого появилась **многослойная memory model**, где у памяти появился явный смысл:
 
-### Timeweb
-
-- `AGENT_ID`
-- `TIMEWEB_USER_TOKEN`
-
-### Hugging Face
-
-- `HF_API_TOKEN`
-
-Если настроено несколько провайдеров сразу, по умолчанию выбирается первая доступная модель из `LanguageModelFactory`.
-
-## Команды в чате
-
-### Общие команды
-
-- `/help` — показывает все доступные команды, сгруппированные по разделам.
-- `/clear` — очищает контекст, сохраняя системное сообщение.
-- `/models` — показывает доступные модели и их статус.
-- `/use <id>` — переключает модель. При переключении заново выбирается стратегия памяти.
-- `/exit` / `/quit` — завершает приложение.
-
-### Команды памяти
-
-- `/memory` — показывает все слои памяти.
-- `/memory short` — показывает derived short-term представление текущей стратегии.
-- `/memory working` — показывает рабочую память текущей задачи.
-- `/memory long` — показывает долговременную память.
-- `/memory pending` — показывает pending-кандидатов на сохранение.
-- `/memory categories` — показывает все доступные категории памяти.
-- `/memory categories working` — показывает категории только для рабочего слоя.
-- `/memory categories long` — показывает категории только для долговременного слоя.
-- `/memory approve [id...]` — подтверждает все pending-кандидаты или только выбранные.
-- `/memory reject [id...]` — отклоняет все pending-кандидаты или только выбранные.
-- `/memory add working <category> <text>` — вручную добавляет запись в рабочую память.
-- `/memory add long <category> <text>` — вручную добавляет запись в долговременную память.
-- `/memory note edit <working|long> <id> text <value>` — меняет текст записи.
-- `/memory note edit <working|long> <id> category <value>` — меняет категорию записи.
-- `/memory note delete <working|long> <id>` — удаляет запись по id.
-
-### Дополнительные команды стратегии `Ветки диалога`
-
-Эти команды доступны только при активной стратегии `Ветки диалога`:
-
-- `/checkpoint [name]` — создаёт checkpoint текущего состояния диалога.
-- `/branches` — показывает активную ветку, последний checkpoint и список веток.
-- `/branch create <name>` — создаёт новую ветку от последнего checkpoint.
-- `/branch use <name>` — переключает диалог на выбранную ветку.
-
-## Стратегии памяти
-
-В проекте используется layered memory model:
-
-- `short-term` — вычисленное стратегией short-term представление текущего диалога;
+- `short-term` — то, что стратегия считает текущим краткосрочным контекстом;
 - `working` — данные текущей задачи;
-- `long-term` — профиль, устойчивые решения и повторно полезные знания.
+- `long-term` — устойчивые предпочтения, договорённости и повторно полезные знания;
+- `pending` — кандидаты на сохранение, которые ещё не подтверждены.
 
-По умолчанию приложение стартует со стратегией `Без сжатия`.
+Именно это и стало главным развитием проекта: память перестала быть просто “историей диалога” и стала отдельной управляемой подсистемой.
 
-При переключении модели через `use <id>` CLI предлагает выбрать одну из доступных стратегий памяти.
+## Что появилось нового
 
-### 1. Без сжатия
+### 1. Layered memory model
 
-Агент отправляет в модель всю сохранённую историю как есть.
+Память теперь разделена на отдельные слои:
 
-### 2. Сжатие через summary
-
-Когда в диалоге накапливается минимум 5 сообщений, стратегия начинает сворачивать старую часть истории в rolling summary:
-
-- summary обновляется пачками по 3 сообщения;
-- последние 2 сообщения остаются вне summary;
-- в prompt уходят summary и свежий хвост сообщений.
-
-### 3. Скользящее окно
-
-В prompt уходят:
-
-- системные сообщения;
-- только последние 2 сообщения диалога.
-
-Остальная история сохраняется, но не отправляется в модель.
-
-### 4. Sticky Facts
-
-Стратегия хранит отдельный блок `facts` и отправляет в модель:
-
-- facts;
-- последние 2 сообщения.
-
-Сейчас facts обновляются батчами:
-
-- после накопления 3 новых пользовательских сообщений;
-- через отдельный LLM-вызов;
-- в facts попадают цель, ограничения, предпочтения, решения и договорённости.
-
-### 5. Ветки диалога
-
-Стратегия позволяет:
-
-- сохранить checkpoint общего состояния диалога;
-- создать несколько независимых веток от одной точки;
-- продолжить диалог в каждой ветке отдельно;
-- переключаться между ветками без смешивания контекста.
-
-Создание стратегий централизовано в `MemoryStrategyFactory`.
-
-## Как собирается prompt
-
-Итоговый prompt собирается в таком порядке:
-
-1. system prompt
-2. long-term memory
-3. working memory
-4. short-term context из выбранной стратегии
-
-## Архитектура
-
-Проект сейчас устроен по принципу:
-
-- общее ядро отдельно;
-- всё strategy-specific рядом с конкретной стратегией;
-- CLI выступает как адаптер поверх headless core;
-- comparison runner живёт отдельно от основного пользовательского потока.
-
-### Основные слои
-
-- `bootstrap` — сборка runtime-контекста приложения без привязки к конкретному UI.
-- `app.output` — нейтральные события приложения, которые может потреблять любой UI.
-- `ui.cli` — парсинг команд, состояние CLI-сессии и рендеринг в консоль.
-- `agent` — core-логика агента, lifecycle и capability.
-- `agent.memory.core` — общие контракты памяти и менеджер памяти.
-- `agent.memory.model` — модели состояния памяти.
-- `agent.memory.strategy` — фабрика стратегий и их feature-specific подпапки.
-- `devtools.comparison` — сценарии сравнения стратегий, judge и отчёты.
-
-### Структура memory-слоя
-
-- `agent/memory/core`
-  - `DefaultMemoryManager`
-  - `MemoryManager`
-  - `MemoryStrategy`
-- `agent/memory/layer`
-  - `MemoryLayerAllocator`
-  - `RuleBasedMemoryLayerAllocator`
-- `agent/memory/model`
-  - `MemoryState`
-  - `ShortTermMemory`
-  - `WorkingMemory`
-  - `LongTermMemory`
-  - `StrategyState`
-- `agent/memory/prompt`
-  - `LayeredMemoryPromptAssembler`
-- `agent/memory/strategy`
-  - `MemoryStrategyFactory`
-  - `MemoryStrategyType`
-  - `branching/*`
-  - `nocompression/*`
-  - `slidingwindow/*`
-  - `stickyfacts/*`
-  - `summary/*`
-
-### Capability-подход
-
-Базовые интерфейсы `Agent` и `MemoryManager` содержат только общее API.
-
-Дополнительные возможности конкретной стратегии отдаются через capability-слой. Сейчас это используется для `Branching`: специализированные операции доступны только если активная стратегия их поддерживает.
-
-## Основной пользовательский сценарий
-
-Ниже показано, как пользовательский запрос проходит через основные части приложения.
-
-```mermaid
-sequenceDiagram
-    participant U as "User"
-    participant M as "Main.kt"
-    participant C as "CliSessionController"
-    participant P as "CliCommandParser"
-    participant R as "CliRenderer"
-    participant L as "AppEventLifecycleListener"
-    participant A as "MrAgent"
-    participant MM as "DefaultMemoryManager"
-    participant MS as "MemoryStrategy"
-    participant LM as "LanguageModel"
-    participant S as "JsonConversationStore"
-
-    U->>M: "Запуск приложения"
-    M->>M: "ApplicationBootstrap.createRuntime()"
-    M->>L: "onModelWarmupStarted()"
-    L->>R: "AppEvent.ModelWarmupStarted"
-    M->>L: "onModelWarmupFinished()"
-    L->>R: "AppEvent.ModelWarmupFinished"
-    M->>A: "createAgent(..., NO_COMPRESSION)"
-    M->>R: "AppEvent.SessionStarted"
-    M->>R: "AppEvent.AgentInfoAvailable"
-
-    U->>M: "Пользовательский ввод"
-    M->>C: "handle(input)"
-    C->>P: "parse(input)"
-    P-->>C: "CliCommand"
-    C->>A: "previewTokenStats(prompt)"
-    A->>MM: "previewTokenStats(prompt)"
-    MM->>MS: "effectiveContext(...)"
-    C->>R: "AppEvent.TokenPreviewAvailable"
-
-    C->>A: "ask(prompt)"
-    A->>MM: "appendUserMessage(prompt)"
-    MM->>MS: "refreshState(..., REGULAR)"
-    MM->>S: "saveState(...)"
-
-    A->>L: "onModelRequestStarted()"
-    L->>R: "AppEvent.ModelRequestStarted"
-    A->>LM: "complete(effectiveContext)"
-    LM-->>A: "LanguageModelResponse"
-    A->>L: "onModelRequestFinished()"
-    L->>R: "AppEvent.ModelRequestFinished"
-
-    A->>MM: "appendAssistantMessage(response)"
-    MM->>S: "saveState(...)"
-    A-->>C: "AgentResponse"
-    C->>R: "AppEvent.AssistantResponseAvailable"
-```
-
-## Где вступает в игру MemoryCandidateValidator
-
-Да. Крупно цепочка сейчас такая.
-
-## 1. Пользователь вводит сообщение
-CLI получает строку и решает:
-- это встроенная команда (`memory`, `help`, `use`, и т.д.)
-- или обычное сообщение для модели
-
-Если это обычное сообщение, дальше идём в агент.
-
-## 2. Сначала считается локальный preview токенов
-Перед основным запросом система делает локальную оценку:
-- текущего сообщения
-- истории
-- полного запроса
-
-На этом этапе `MemoryCandidateValidator` ещё не участвует.
-
-## 3. Агент передаёт сообщение в memory manager
-Дальше вызывается логика вроде:
-- `appendUserMessage(...)` в `DefaultMemoryManager.kt`
-
-Именно здесь начинается работа памяти.
-
-## 4. Сообщение добавляется в short-term raw log
-Сначала сообщение просто попадает в:
-- `shortTerm.rawMessages`
-
-То есть short-term сохраняется раньше, чем allocator и validator вообще что-то решают.
-
-Это важно:
-- `MemoryCandidateValidator` не влияет на попадание сообщения в short-term
-- он влияет только на кандидатов для `working` и `long-term`
-
-## 5. Запускается allocator
-Потом `DefaultMemoryManager` вызывает:
-- `processCandidatesIfAllowed(...)`
-
-Внутри:
-- `memoryLayerWritePolicy.shouldAllocate(message)`
-- `memoryLayerAllocator.extractCandidates(...)`
-
-Здесь allocator пытается извлечь из нового сообщения черновики заметок:
-- в `working`
-- в `long-term`
-
-Например:
-- `goal`
-- `deadline`
-- `communication_style`
-
-На этом этапе у нас ещё не настоящая память, а только кандидаты.
-
-## 6. Вот здесь вступает `MemoryCandidateValidator`
-Сразу после allocator’а:
-- `candidateValidator.validate(message, extractedCandidates)`
-
-То есть порядок такой:
-1. allocator что-то извлёк
-2. validator фильтрует извлечённое
-3. только потом идём дальше
-
-Если structural validator кандидат отбросил:
-- пользователь его уже не увидит
-- в `pending` он не попадёт
-- в `working/long-term` тоже не попадёт
-
-Сейчас validator проверяет только структурную корректность кандидата и не выполняет category-specific regex filtering.
-
-## 7. Потом confirmation policy решает судьбу валидных кандидатов
-После validator:
-- `confirmationPolicy.classify(...)`
-
-Она делит кандидатов на:
-- `autoApply`
+- `short-term`
+- `working`
+- `long-term`
 - `pending`
 
-Например:
-- часть `working` может примениться сразу
-- весь `long-term` обычно уходит в `pending`
+Они хранятся раздельно и живут по разным правилам.
 
-## 8. Auto-apply сразу попадает в durable memory
-Через `candidateApplier.apply(...)`:
-- обновляется `working`
-- обновляется `long-term`
+### 2. Явное распределение данных по слоям
 
-## 9. Pending-кандидаты складываются в очередь
-Если кандидат не авто-сохраняется:
-- он попадает в `state.pending`
+Теперь сообщение не просто попадает в общую историю.
 
-И потом пользователь уже видит:
-- `Есть кандидаты на сохранение в память. Посмотри их командой /memory pending.`
+После пользовательского ввода система:
 
-## 10. Потом short-term стратегия пересчитывает derived view
-После memory-layer части вызывается:
-- `refreshState(...)`
-- а внутри `memoryStrategy.refreshState(...)`
+1. добавляет сообщение в `short-term`;
+2. пытается извлечь кандидатов для `working` и `long-term`;
+3. валидирует их структурно;
+4. решает, что можно применить сразу, а что должно уйти в `pending`;
+5. только после этого обновляет долговременные слои памяти.
 
-Это уже про short-term стратегию:
-- `no_compression`
-- `sliding_window`
-- `summary`
-- `sticky_facts`
-- `branching`
+Это и есть реализация требования:
 
-`MemoryCandidateValidator` здесь уже не участвует.
+> вы явно выбирали, что и куда сохраняется
 
-## 11. После этого собирается prompt и идёт запрос в модель
-Когда память обновлена:
-- строится effective conversation
-- вызывается основная модель
-- получаем ответ ассистента
+Причём “явность” появилась в двух формах:
 
-## 12. Ответ показывается пользователю
-CLI выводит:
-- блок ответа модели
-- служебные блоки
-- и при наличии pending-подсказку
+- на уровне архитектуры — через отдельные memory layers и pipeline извлечения;
+- на уровне UX — через `pending`, подтверждение и ручное управление памятью.
 
----
+### 3. Pending-flow
 
-# Самое важное про `MemoryCandidateValidator`
+Долговременные и спорные записи теперь не обязаны сохраняться автоматически.
 
-Он срабатывает:
-- **после allocator**
-- **до pending**
-- **до auto-save**
-- **до показа кандидатов пользователю**
+Вместо этого появился слой `pending`, где хранятся кандидаты на сохранение.
 
-То есть он стоит вот здесь:
+Пользователь может:
 
-`пользовательское сообщение`
--> `shortTerm.rawMessages`
--> `allocator.extractCandidates`
--> `MemoryCandidateValidator.validate`
--> `confirmationPolicy.classify`
--> `autoApply / pending`
--> `refreshState(short-term strategy)`
--> `prompt`
--> `ответ модели`
-
----
-
-# Почему это важно
-
-Если validator слишком строгий, он не просто “не даёт сохранить мусор”.
-Он может:
-- убрать кандидата ещё до того, как пользователь вообще узнает о нём.
-
-То есть в вашей новой модели с `pending` он действительно стал гораздо сильнее, чем может казаться.
-
-## Режим сравнения стратегий
-
-Для сравнения стратегий есть отдельный dev-инструмент:
-
-```powershell
-.\gradlew.bat compareStrategies
-```
-
-По умолчанию он:
-
-- запускается на 5 шагах;
-- включает LLM judge;
-- сравнивает все доступные стратегии;
-- для `branching` тоже уважает `comparisonSteps`, а не использует фиксированные 8 шагов.
-
-### Полезные варианты запуска
-
-Короткий прогон по умолчанию:
-
-```powershell
-.\gradlew.bat compareStrategies
-```
-
-Полный прогон на 12 шагах:
-
-```powershell
-.\gradlew.bat compareStrategies -PcomparisonSteps=12
-```
-
-Запуск только для выбранных стратегий:
-
-```powershell
-.\gradlew.bat compareStrategies -PcomparisonStrategies=no_compression,sticky_facts,branching
-```
-
-Запуск без judge:
-
-```powershell
-.\gradlew.bat compareStrategies -PcomparisonJudge=false
-```
-
-Запуск в новом окне PowerShell:
-
-```powershell
-Start-Process powershell -ArgumentList '-NoExit','-Command','chcp.com 65001 | Out-Null; [Console]::InputEncoding = [System.Text.Encoding]::UTF8; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; Set-Location ''C:\Users\compadre\Downloads\Projects\AiAdvent\day_11''; .\gradlew.bat compareStrategies'
-```
-
-### Что делает comparison runner
-
-- для линейных стратегий (`no_compression`, `summary_compression`, `sliding_window`, `sticky_facts`) прогоняет один сценарий сбора ТЗ;
-- для `branching` запускает отдельный branch-aware сценарий:
-  - общая часть;
-  - checkpoint;
-  - две ветки с независимым продолжением;
-- собирает единый JSON-отчёт;
-- при включённом judge делает дополнительный LLM-запрос для качественной оценки.
-
-Итоговый отчёт сохраняется в `build/reports/strategy-comparison/report.json`.
-
-### Схема работы comparison mode
-
-```mermaid
-sequenceDiagram
-    participant G as "Gradle compareStrategies"
-    participant CM as "StrategyComparisonMain"
-    participant B as "ApplicationBootstrap"
-    participant LE as "DefaultStrategyConversationExecutor"
-    participant BE as "BranchingStrategyConversationExecutor"
-    participant AG as "MrAgent"
-    participant TL as "TracingLanguageModel"
-    participant JS as "StrategyComparisonJudgeService"
-    participant SR as "StrategyComparisonService"
-    participant RF as "report.json"
-
-    G->>CM: "main()"
-    CM->>B: "createRuntime(temperature=0.0)"
-    B-->>CM: "ApplicationRuntime"
-
-    loop "Каждая выбранная стратегия"
-        alt "Линейная стратегия"
-            CM->>LE: "execute(option, linearScenario)"
-            LE->>AG: "ask(...) по каждому шагу"
-            AG->>TL: "complete(...)"
-            TL-->>LE: "response + usage trace"
-            LE-->>CM: "StrategyExecutionReport"
-        else "Branching"
-            CM->>BE: "execute(option, branchingScenario)"
-            BE->>AG: "общая часть"
-            BE->>AG: "capability(BranchingCapability)"
-            BE->>AG: "checkpoint / branch / switch"
-            BE->>TL: "complete(...) по шагам веток"
-            BE-->>CM: "StrategyExecutionReport с branchExecutions"
-        end
-        CM->>SR: "createReport(...)"
-        SR-->>CM: "partial report"
-        CM->>RF: "save partial report"
-    end
-
-    alt "judge включён"
-        CM->>JS: "evaluate(judgeInput)"
-        JS-->>CM: "judgeResult"
-        CM->>SR: "createReport(..., judgeResult)"
-    end
-
-    CM->>RF: "save final report"
-```
-
-## Как читать comparison report
-
-В консоль и в JSON-отчёт попадают, в частности, такие поля:
-
-- `Локальные prompt-токены` — локальная оценка размера основного prompt.
-- `Provider prompt-токены` — prompt-токены по данным провайдера.
-- `Provider completion-токены` — токены, сгенерированные моделью.
-- `Provider total-токены` — сумма prompt и completion по данным провайдера.
-- `Внутренние LLM-вызовы по шагам` — сколько дополнительных обращений к модели стратегия делала внутри каждого шага.
-
-Для стратегий с внутренними служебными вызовами, например `summary_compression` и `sticky_facts`, provider prompt-токены могут быть заметно больше локальных.
-
-## Диаграмма классов
-
-```mermaid
-classDiagram
-    class Agent~T~ {
-      <<interface>>
-      +previewTokenStats(userPrompt)
-      +ask(userPrompt)
-      +clearContext()
-      +replaceContextFromFile(sourcePath)
-      +capability(capabilityType)
-    }
-    class MrAgent
-
-    class MemoryManager {
-      <<interface>>
-      +currentConversation()
-      +previewTokenStats(userPrompt)
-      +appendUserMessage(userPrompt)
-      +appendAssistantMessage(content)
-      +clear()
-      +replaceContextFromFile(sourcePath)
-      +capability(capabilityType)
-    }
-    class DefaultMemoryManager
-
-    class AgentCapability {
-      <<interface>>
-    }
-    class BranchingCapability
-
-    class MemoryStrategy {
-      <<interface>>
-      +type
-      +effectiveContext(state)
-      +refreshState(state, mode)
-    }
-    class NoCompressionMemoryStrategy
-    class SummaryCompressionMemoryStrategy
-    class SlidingWindowMemoryStrategy
-    class StickyFactsMemoryStrategy
-    class BranchingMemoryStrategy
-
-    class StrategyState
-    class SummaryStrategyState
-    class StickyFactsStrategyState
-    class BranchingStrategyState
-
-    class ConversationSummarizer {
-      <<interface>>
-      +summarize(messages)
-    }
-    class LlmConversationSummarizer
-
-    class ConversationFactsExtractor {
-      <<interface>>
-      +extract(existingFacts, newMessagesBatch)
-    }
-    class LlmConversationFactsExtractor
-
-    class LanguageModel {
-      <<interface>>
-      +info
-      +tokenCounter
-      +complete(messages)
-    }
-    class TimewebLanguageModel
-    class HuggingFaceLanguageModel
-
-    class ConversationStore {
-      <<interface>>
-      +loadState()
-      +saveState(state)
-    }
-    class JsonConversationStore
-
-    Agent <|.. MrAgent
-    MemoryManager <|.. DefaultMemoryManager
-    AgentCapability <|.. BranchingCapability
-    MemoryStrategy <|.. NoCompressionMemoryStrategy
-    MemoryStrategy <|.. SummaryCompressionMemoryStrategy
-    MemoryStrategy <|.. SlidingWindowMemoryStrategy
-    MemoryStrategy <|.. StickyFactsMemoryStrategy
-    MemoryStrategy <|.. BranchingMemoryStrategy
-    StrategyState <|.. SummaryStrategyState
-    StrategyState <|.. StickyFactsStrategyState
-    StrategyState <|.. BranchingStrategyState
-    ConversationSummarizer <|.. LlmConversationSummarizer
-    ConversationFactsExtractor <|.. LlmConversationFactsExtractor
-    LanguageModel <|.. TimewebLanguageModel
-    LanguageModel <|.. HuggingFaceLanguageModel
-    ConversationStore <|.. JsonConversationStore
-
-    MrAgent --> MemoryManager
-    MrAgent --> LanguageModel
-    DefaultMemoryManager --> MemoryStrategy
-    DefaultMemoryManager --> ConversationStore
-    DefaultMemoryManager --> BranchingCapability
-    SummaryCompressionMemoryStrategy --> ConversationSummarizer
-    StickyFactsMemoryStrategy --> ConversationFactsExtractor
-```
-
-## Как читать проект
-
-Если хочется быстро понять поток управления, удобный порядок такой:
-
-1. `src/main/kotlin/Main.kt`
-2. `src/main/kotlin/bootstrap/ApplicationBootstrap.kt`
-3. `src/main/kotlin/ui/cli/CliCommands.kt`
-4. `src/main/kotlin/ui/cli/CliCommandParser.kt`
-5. `src/main/kotlin/ui/cli/CliSessionController.kt`
-6. `src/main/kotlin/ui/cli/CliRenderer.kt`
-7. `src/main/kotlin/agent/impl/MrAgent.kt`
-8. `src/main/kotlin/agent/core/Agent.kt`
-9. `src/main/kotlin/agent/memory/core/DefaultMemoryManager.kt`
-10. `src/main/kotlin/agent/memory/strategy/MemoryStrategyFactory.kt`
-11. `src/main/kotlin/agent/memory/model/MemoryState.kt`
-12. `src/main/kotlin/agent/memory/model/StrategyState.kt`
-13. `src/main/kotlin/agent/memory/strategy/summary/SummaryCompressionMemoryStrategy.kt`
-14. `src/main/kotlin/agent/memory/strategy/stickyfacts/StickyFactsMemoryStrategy.kt`
-15. `src/main/kotlin/agent/memory/strategy/branching/BranchingMemoryStrategy.kt`
-16. `src/main/kotlin/agent/memory/strategy/branching/BranchCoordinator.kt`
-17. `src/main/kotlin/devtools/comparison/StrategyComparisonMain.kt`
-18. `src/main/kotlin/devtools/comparison/BranchingStrategyConversationExecutor.kt`
-19. `src/main/kotlin/agent/storage/JsonConversationStore.kt`
-
-## Тесты
-
-Запуск тестов:
-
-```powershell
-.\gradlew.bat test
-```
-
-Покрываются, в частности:
-
-- фабрика моделей и bootstrap;
-- storage и mapper'ы;
-- все стратегии памяти;
-- branching-сценарии и capability-поведение;
-- comparison runner;
-- judge-интеграция;
-- форматирование token stats.
-
-## IDE
-
-Для навигации по коду и запуска тестов удобнее всего открыть проект в IntelliJ IDEA Community Edition.
+- посмотреть кандидатов;
+- подтвердить их;
+- отклонить;
+- исправить до сохранения.
 
+Это сильно изменило поведение системы:
+
+- память стала менее “магической”;
+- спорные извлечения перестали молча попадать в durable memory;
+- у пользователя появился реальный контроль над тем, что считается памятью.
+
+### 4. Ручное управление `working` и `long-term`
+
+Поверх pending-flow добавлены прямые команды управления памятью.
+
+Теперь пользователь может вручную:
+
+- добавить запись;
+- изменить запись;
+- удалить запись.
+
+Это особенно важно, потому что allocator и LLM-извлечение не всегда идеальны.
+
+В результате память перестала зависеть только от автоматического извлечения и стала управляемой вручную.
+
+### 5. Отдельный utility LLM для allocator'а
+
+Для распределения заметок по durable memory был добавлен `LlmMemoryLayerAllocator`, который может использовать отдельную, более дешёвую модель, независимо от основной модели диалога.
+
+Это позволило разделить:
+
+- основную модель ответа;
+- утилитную модель для memory extraction.
+
+Если utility LLM недоступен, сохраняется fallback на rule-based allocator.
+
+### 6. Диагностика allocator'а
+
+Чтобы понять, почему кандидаты иногда не извлекаются, добавлен trace-лог:
+
+- [build/logs/llm-memory-layer-allocator.log](C:/Users/compadre/Downloads/Projects/AiAdvent/day_11/build/logs/llm-memory-layer-allocator.log)
+
+В нём видно:
+
+- что пришло на вход allocator'у;
+- какие prompt'ы ушли в utility LLM;
+- что модель вернула;
+- какие кандидаты были извлечены;
+- был ли fallback на rule-based allocator.
+
+Это важно не только для отладки, но и для понимания того, как реально формируется память.
+
+## Как теперь устроена память
+
+### Short-term
+
+`short-term` по-прежнему зависит от выбранной стратегии памяти, но теперь смысл слоя стал чётче.
+
+Внутри short-term хранится:
+
+- сырой журнал переписки;
+- derived short-term представление, вычисленное стратегией;
+- strategy-specific state.
+
+При смене стратегии derived short-term пересобирается заново под новую стратегию.
+
+То есть short-term теперь можно понимать так:
+
+- raw log — источник истины;
+- strategy-derived view — то, что реально используется как краткосрочный контекст.
+
+### Working
+
+`working` хранит всё, что относится к текущей задаче:
+
+- цель;
+- ограничения;
+- срок;
+- бюджет;
+- интеграции;
+- решения;
+- открытые вопросы.
+
+Это слой оперативного контекста задачи.
+
+### Long-term
+
+`long-term` хранит устойчивые данные:
+
+- стиль общения;
+- постоянные предпочтения;
+- архитектурные договорённости;
+- повторно полезные знания.
+
+Важно, что этот слой больше не должен засоряться временными деталями текущего шага.
+
+### Pending
+
+`pending` — промежуточный workflow-слой.
+
+Он не является “настоящей памятью” сам по себе, но именно через него проходит подтверждение новых durable notes.
+
+## Как это влияет на ответы ассистента
+
+Теперь итоговый prompt собирается из разных слоёв памяти, а не только из истории диалога.
+
+Высокоуровнево порядок такой:
+
+1. system prompt
+2. `long-term`
+3. `working`
+4. strategy-derived `short-term`
+
+Это изменило поведение агента:
+
+- стиль ответа может поддерживаться через `long-term`;
+- данные проекта и текущей задачи могут поддерживаться через `working`;
+- краткосрочный диалоговый контекст по-прежнему обеспечивается `short-term`.
+
+То есть ответ модели теперь зависит не только от последней истории диалога, но и от того, **что именно подтверждено и сохранено в слоях памяти**.
+
+## Как теперь выглядит пользовательское управление памятью
+
+Все встроенные команды CLI теперь начинаются с `/`.
+
+Это было сделано специально, чтобы:
+
+- сократить вероятность случайной отправки команды в LLM;
+- сделать команды и обычные сообщения визуально и семантически разными.
+
+Основные команды памяти:
+
+- `/memory`
+- `/memory short`
+- `/memory working`
+- `/memory long`
+- `/memory pending`
+- `/memory approve [id...]`
+- `/memory reject [id...]`
+- `/memory edit <id> text|layer|category <value>`
+- `/memory add working <category> <text>`
+- `/memory add long <category> <text>`
+- `/memory note edit <working|long> <id> text|category <value>`
+- `/memory note delete <working|long> <id>`
+
+Из-за этого memory model стала не только внутренней архитектурой, но и частью пользовательского интерфейса.
+
+## Архитектурный смысл изменений
+
+Главное развитие `day_11` по сравнению с `day_10` можно сформулировать так:
+
+- `day_10` — проект про стратегии работы с историей диалога;
+- `day_11` — проект про явную модель памяти ассистента.
+
+Появились:
+
+- разные слои памяти с разным смыслом;
+- pipeline извлечения и подтверждения;
+- ручное управление durable memory;
+- отдельный utility LLM для memory allocation;
+- trace-диагностика allocator'а.
+
+То есть проект стал ближе не просто к “чату с памятью”, а к **ассистенту с управляемой и наблюдаемой memory subsystem**.
+
+## Что в итоге получилось
+
+Результат этого этапа:
+
+- агент с явной layered memory model;
+- раздельное хранение краткосрочной, рабочей и долговременной памяти;
+- подтверждение кандидатов перед сохранением в durable memory;
+- ручное управление памятью из CLI;
+- возможность проверять, какие данные попадают в какой слой;
+- возможность наблюдать, как эти слои влияют на ответы ассистента.
+
+Именно это и было целью `day_11`.
