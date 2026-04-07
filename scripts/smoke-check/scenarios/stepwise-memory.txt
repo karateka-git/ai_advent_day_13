@@ -1,0 +1,24 @@
+/use timeweb
+1
+/memory add
+working
+goal
+Собрать ТЗ по профилям.
+confirm
+/memory add
+working
+goal
+Подготовить сценарий ручной проверки.
+confirm
+/memory working
+/memory add
+long
+reusable_knowledge
+В проекте есть пошаговое добавление заметок в память.
+confirm
+/memory long
+/memory add
+long
+/cancel
+/memory long
+/exit

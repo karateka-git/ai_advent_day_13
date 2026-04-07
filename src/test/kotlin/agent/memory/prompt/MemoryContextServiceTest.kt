@@ -63,7 +63,29 @@ class MemoryContextServiceTest {
         assertEquals(
             ChatMessage(
                 ChatRole.SYSTEM,
-                "Ты помощник.\n\nUser profile (Anna)\n- communication_style: Отвечай кратко\n\nLong-term memory\n- architectural_agreement: Используем Kotlin CLI\n\nWorking memory\n- goal: Собрать ТЗ"
+                """
+                Ты помощник.
+
+                Профиль пользователя (Anna)
+
+                Это обязательные правила ответа для текущего пользователя.
+                Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
+                Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
+
+                Приоритет:
+                - Текущее сообщение пользователя важнее профиля.
+                - Профиль важнее стандартного поведения ассистента.
+                - Профиль важнее инерции предыдущих ответов в диалоге.
+
+                Правила ответа
+                - Отвечай кратко
+
+                Long-term memory
+                - architectural_agreement: Используем Kotlin CLI
+
+                Working memory
+                - goal: Собрать ТЗ
+                """.trimIndent()
             ),
             conversation.first()
         )

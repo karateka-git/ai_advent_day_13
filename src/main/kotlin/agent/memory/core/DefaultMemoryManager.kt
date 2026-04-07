@@ -107,12 +107,11 @@ class DefaultMemoryManager(
         val assistantMessage = ChatMessage(role = ChatRole.ASSISTANT, content = content)
         val stateWithMessage = appendShortTermMessage(state, assistantMessage)
         val stateWithCandidates = processCandidatesIfAllowed(stateWithMessage, assistantMessage)
-        state =
-            if (memoryStrategy.type == MemoryStrategyType.BRANCHING) {
-                memoryStrategy.refreshState(stateWithCandidates, MemoryStateRefreshMode.REGULAR)
-            } else {
-                stateWithCandidates
-            }
+        state = refreshState(
+            updatedState = stateWithCandidates,
+            notifyCompression = false,
+            mode = MemoryStateRefreshMode.REGULAR
+        )
         saveState()
     }
 

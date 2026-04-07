@@ -1,0 +1,19 @@
+/use timeweb
+1
+/users
+/user
+/user create anna Анна
+/user use anna
+/profile add
+communication_style
+Отвечай кратко и по делу.
+confirm
+/profile add
+persistent_preference
+Сначала давай вывод, потом детали.
+confirm
+/profile
+/user use default
+/profile
+/users
+/exit

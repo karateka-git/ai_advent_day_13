@@ -14,7 +14,7 @@ class LayeredMemoryPromptAssemblerTest {
     private val assembler = LayeredMemoryPromptAssembler()
 
     @Test
-    fun `injects user profile and long-term memory into first system message`() {
+    fun `injects active user profile as instruction block into first system message`() {
         val prompt = assembler.assemble(
             systemPrompt = "Ты помощник.",
             activeUser = UserAccount("anna", "Anna"),
@@ -23,7 +23,14 @@ class LayeredMemoryPromptAssemblerTest {
                     MemoryNote(
                         id = "",
                         category = "communication_style",
-                        content = "Отвечай кратко",
+                        content = "Отвечай кратко.",
+                        ownerType = MemoryOwnerType.USER,
+                        ownerId = "anna"
+                    ),
+                    MemoryNote(
+                        id = "",
+                        category = "persistent_preference",
+                        content = "Сначала давай вывод, потом детали.",
                         ownerType = MemoryOwnerType.USER,
                         ownerId = "anna"
                     ),
@@ -42,7 +49,32 @@ class LayeredMemoryPromptAssemblerTest {
         assertEquals(
             ChatMessage(
                 ChatRole.SYSTEM,
-                "Ты помощник.\n\nUser profile (Anna)\n- communication_style: Отвечай кратко\n\nLong-term memory\n- architectural_agreement: Используй Kotlin\n\nWorking memory\n- goal: Собрать ТЗ"
+                """
+                Ты помощник.
+
+                Профиль пользователя (Anna)
+
+                Это обязательные правила ответа для текущего пользователя.
+                Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
+                Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
+
+                Приоритет:
+                - Текущее сообщение пользователя важнее профиля.
+                - Профиль важнее стандартного поведения ассистента.
+                - Профиль важнее инерции предыдущих ответов в диалоге.
+
+                Правила ответа
+                - Отвечай кратко.
+
+                Постоянные предпочтения
+                - Сначала давай вывод, потом детали.
+
+                Long-term memory
+                - architectural_agreement: Используй Kotlin
+
+                Working memory
+                - goal: Собрать ТЗ
+                """.trimIndent()
             ),
             prompt.first()
         )
@@ -61,5 +93,57 @@ class LayeredMemoryPromptAssemblerTest {
 
         assertEquals(ChatMessage(ChatRole.SYSTEM, "Ты помощник."), prompt.first())
         assertEquals(ChatMessage(ChatRole.USER, "Привет"), prompt[1])
+    }
+
+    @Test
+    fun `does not include profile notes of another user`() {
+        val prompt = assembler.assemble(
+            systemPrompt = "Ты помощник.",
+            activeUser = UserAccount("default", "Default"),
+            longTermMemory = LongTermMemory(
+                notes = listOf(
+                    MemoryNote(
+                        id = "",
+                        category = "communication_style",
+                        content = "Общайся как со старым другом.",
+                        ownerType = MemoryOwnerType.USER,
+                        ownerId = "vlados"
+                    ),
+                    MemoryNote(
+                        id = "",
+                        category = "communication_style",
+                        content = "Отвечай строго по делу.",
+                        ownerType = MemoryOwnerType.USER,
+                        ownerId = "default"
+                    )
+                )
+            ),
+            workingMemory = WorkingMemory(),
+            shortTermContext = listOf(ChatMessage(ChatRole.SYSTEM, "старый системный prompt"))
+        )
+
+        assertEquals(
+            ChatMessage(
+                ChatRole.SYSTEM,
+                """
+                Ты помощник.
+
+                Профиль пользователя (Default)
+
+                Это обязательные правила ответа для текущего пользователя.
+                Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
+                Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
+
+                Приоритет:
+                - Текущее сообщение пользователя важнее профиля.
+                - Профиль важнее стандартного поведения ассистента.
+                - Профиль важнее инерции предыдущих ответов в диалоге.
+
+                Правила ответа
+                - Отвечай строго по делу.
+                """.trimIndent()
+            ),
+            prompt.first()
+        )
     }
 }
