@@ -21,7 +21,6 @@ class StickyFactsMemoryStrategyTest {
             factsExtractor = NoOpFactsExtractor()
         )
         val messages = listOf(
-            ChatMessage(ChatRole.SYSTEM, "system"),
             ChatMessage(ChatRole.USER, "u1"),
             ChatMessage(ChatRole.ASSISTANT, "a1"),
             ChatMessage(ChatRole.USER, "u2"),
@@ -45,7 +44,6 @@ class StickyFactsMemoryStrategyTest {
 
         assertEquals(
             listOf(
-                ChatMessage(ChatRole.SYSTEM, "system"),
                 ChatMessage(
                     ChatRole.SYSTEM,
                     "Важные facts из диалога:\n- budget: до 120 тысяч рублей\n- goal: Собрать ТЗ"
@@ -68,7 +66,6 @@ class StickyFactsMemoryStrategyTest {
             factsExtractor = extractor
         )
         val messages = listOf(
-            ChatMessage(ChatRole.SYSTEM, "system"),
             ChatMessage(ChatRole.USER, "u1"),
             ChatMessage(ChatRole.ASSISTANT, "a1"),
             ChatMessage(ChatRole.USER, "u2")
@@ -106,7 +103,6 @@ class StickyFactsMemoryStrategyTest {
             factsExtractor = extractor
         )
         val messages = listOf(
-            ChatMessage(ChatRole.SYSTEM, "system"),
             ChatMessage(ChatRole.USER, "u0"),
             ChatMessage(ChatRole.ASSISTANT, "a0"),
             ChatMessage(ChatRole.USER, "u1"),
@@ -161,7 +157,6 @@ class StickyFactsMemoryStrategyTest {
             factsExtractor = extractor
         )
         val messages = listOf(
-            ChatMessage(ChatRole.SYSTEM, "system"),
             ChatMessage(ChatRole.USER, "Обнови цель.")
         )
         val state = MemoryState(
@@ -189,7 +184,6 @@ class StickyFactsMemoryStrategyTest {
             factsExtractor = extractor
         )
         val messages = listOf(
-            ChatMessage(ChatRole.SYSTEM, "system"),
             ChatMessage(ChatRole.USER, "Это только preview")
         )
         val state = MemoryState(

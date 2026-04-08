@@ -11,12 +11,8 @@ import agent.memory.model.WorkingMemory
 import agent.memory.strategy.MemoryStrategyType
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import llm.core.LanguageModel
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
-import llm.core.model.LanguageModelInfo
-import llm.core.model.LanguageModelResponse
-import llm.core.tokenizer.TokenCounter
 
 class MemoryContextServiceTest {
     private val service = DefaultMemoryContextService(
@@ -24,7 +20,7 @@ class MemoryContextServiceTest {
     )
 
     @Test
-    fun `builds effective conversation through strategy and layered assembler`() {
+    fun `builds effective prompt context through strategy and layered assembler`() {
         val state = MemoryState(
             shortTerm = ShortTermMemory(
                 rawMessages = listOf(
@@ -55,70 +51,53 @@ class MemoryContextServiceTest {
             activeUserId = "anna"
         )
 
-        val conversation = service.effectiveConversation(
-            systemPrompt = "Ты помощник.",
-            state = state
-        )
+        val promptContext = service.effectivePromptContext(state)
 
         assertEquals(
-            ChatMessage(
-                ChatRole.SYSTEM,
-                """
-                Ты помощник.
-
-                Профиль пользователя (Anna)
-
-                Это обязательные правила ответа для текущего пользователя.
-                Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
-                Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
-
-                Приоритет:
-                - Текущее сообщение пользователя важнее профиля.
-                - Профиль важнее стандартного поведения ассистента.
-                - Профиль важнее инерции предыдущих ответов в диалоге.
-
-                Правила ответа
-                - Отвечай кратко
-
-                Long-term memory
-                - architectural_agreement: Используем Kotlin CLI
-
-                Working memory
-                - goal: Собрать ТЗ
-                """.trimIndent()
+            listOf(
+                ChatMessage(ChatRole.SYSTEM, "ignored"),
+                ChatMessage(ChatRole.USER, "Привет")
             ),
-            conversation.first()
+            promptContext.messages
         )
-        assertEquals(ChatMessage(ChatRole.USER, "Привет"), conversation[1])
+        assertEquals(
+            """
+            Профиль пользователя (Anna)
+
+            Это обязательные правила ответа для текущего пользователя.
+            Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
+            Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
+
+            Приоритет:
+            - Текущее сообщение пользователя важнее профиля.
+            - Профиль важнее стандартного поведения ассистента.
+            - Профиль важнее инерции предыдущих ответов в диалоге.
+
+            Правила ответа
+            - Отвечай кратко
+
+            Long-term memory
+            - architectural_agreement: Используем Kotlin CLI
+
+            Working memory
+            - goal: Собрать ТЗ
+            """.trimIndent(),
+            promptContext.systemPromptContribution
+        )
     }
 
     @Test
-    fun `counts prompt tokens through assembled context`() {
+    fun `preview prompt context uses the same contribution contract`() {
         val state = MemoryState(
             shortTerm = ShortTermMemory(
-                rawMessages = listOf(
-                    ChatMessage(ChatRole.SYSTEM, "ignored"),
-                    ChatMessage(ChatRole.USER, "Привет")
-                ),
-                derivedMessages = listOf(
-                    ChatMessage(ChatRole.SYSTEM, "ignored"),
-                    ChatMessage(ChatRole.USER, "Привет")
-                )
+                derivedMessages = listOf(ChatMessage(ChatRole.USER, "preview"))
             )
         )
-        val languageModel = FakeLanguageModel(CharacterTokenCounter())
 
-        val tokens = service.countPromptTokens(
-            languageModel = languageModel,
-            systemPrompt = "Ты помощник.",
-            state = state
-        )
-        val expectedConversation = service.effectiveConversation("Ты помощник.", state)
+        val promptContext = service.previewPromptContext(state)
 
-        assertEquals(
-            expectedConversation.sumOf { "${it.role.apiValue}\n${it.content}".length },
-            tokens
-        )
+        assertEquals(listOf(ChatMessage(ChatRole.USER, "preview")), promptContext.messages)
+        assertEquals(null, promptContext.systemPromptContribution)
     }
 }
 
@@ -126,20 +105,4 @@ private class EchoShortTermStrategy : MemoryStrategy {
     override val type: MemoryStrategyType = MemoryStrategyType.NO_COMPRESSION
 
     override fun effectiveContext(state: MemoryState): List<ChatMessage> = state.shortTerm.derivedMessages
-}
-
-private class FakeLanguageModel(
-    override val tokenCounter: TokenCounter?
-) : LanguageModel {
-    override val info = LanguageModelInfo(
-        name = "FakeLanguageModel",
-        model = "fake-model"
-    )
-
-    override fun complete(messages: List<ChatMessage>): LanguageModelResponse =
-        error("Не должен вызываться в этом тесте.")
-}
-
-private class CharacterTokenCounter : TokenCounter {
-    override fun countText(text: String): Int = text.length
 }

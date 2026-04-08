@@ -7,16 +7,14 @@ import agent.memory.model.UserAccount
 import agent.memory.model.WorkingMemory
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import llm.core.model.ChatMessage
-import llm.core.model.ChatRole
+import kotlin.test.assertNull
 
 class LayeredMemoryPromptAssemblerTest {
     private val assembler = LayeredMemoryPromptAssembler()
 
     @Test
-    fun `injects active user profile as instruction block into first system message`() {
-        val prompt = assembler.assemble(
-            systemPrompt = "Ты помощник.",
+    fun `builds memory contribution with active user profile and layered notes`() {
+        val contribution = assembler.assembleContribution(
             activeUser = UserAccount("anna", "Anna"),
             longTermMemory = LongTermMemory(
                 notes = listOf(
@@ -39,66 +37,41 @@ class LayeredMemoryPromptAssemblerTest {
             ),
             workingMemory = WorkingMemory(
                 notes = listOf(MemoryNote("goal", "Собрать ТЗ"))
-            ),
-            shortTermContext = listOf(
-                ChatMessage(ChatRole.SYSTEM, "старый системный prompt"),
-                ChatMessage(ChatRole.USER, "Привет")
             )
         )
 
         assertEquals(
-            ChatMessage(
-                ChatRole.SYSTEM,
-                """
-                Ты помощник.
+            """
+            Профиль пользователя (Anna)
 
-                Профиль пользователя (Anna)
+            Это обязательные правила ответа для текущего пользователя.
+            Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
+            Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
 
-                Это обязательные правила ответа для текущего пользователя.
-                Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
-                Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
+            Приоритет:
+            - Текущее сообщение пользователя важнее профиля.
+            - Профиль важнее стандартного поведения ассистента.
+            - Профиль важнее инерции предыдущих ответов в диалоге.
 
-                Приоритет:
-                - Текущее сообщение пользователя важнее профиля.
-                - Профиль важнее стандартного поведения ассистента.
-                - Профиль важнее инерции предыдущих ответов в диалоге.
+            Правила ответа
+            - Отвечай кратко.
 
-                Правила ответа
-                - Отвечай кратко.
+            Постоянные предпочтения
+            - Сначала давай вывод, потом детали.
 
-                Постоянные предпочтения
-                - Сначала давай вывод, потом детали.
+            Long-term memory
+            - architectural_agreement: Используй Kotlin
 
-                Long-term memory
-                - architectural_agreement: Используй Kotlin
-
-                Working memory
-                - goal: Собрать ТЗ
-                """.trimIndent()
-            ),
-            prompt.first()
+            Working memory
+            - goal: Собрать ТЗ
+            """.trimIndent(),
+            contribution
         )
-        assertEquals(ChatMessage(ChatRole.USER, "Привет"), prompt[1])
-    }
-
-    @Test
-    fun `prepends system message when short-term context has none`() {
-        val prompt = assembler.assemble(
-            systemPrompt = "Ты помощник.",
-            activeUser = UserAccount("default", "Default"),
-            longTermMemory = LongTermMemory(),
-            workingMemory = WorkingMemory(),
-            shortTermContext = listOf(ChatMessage(ChatRole.USER, "Привет"))
-        )
-
-        assertEquals(ChatMessage(ChatRole.SYSTEM, "Ты помощник."), prompt.first())
-        assertEquals(ChatMessage(ChatRole.USER, "Привет"), prompt[1])
     }
 
     @Test
     fun `does not include profile notes of another user`() {
-        val prompt = assembler.assemble(
-            systemPrompt = "Ты помощник.",
+        val contribution = assembler.assembleContribution(
             activeUser = UserAccount("default", "Default"),
             longTermMemory = LongTermMemory(
                 notes = listOf(
@@ -118,32 +91,37 @@ class LayeredMemoryPromptAssemblerTest {
                     )
                 )
             ),
-            workingMemory = WorkingMemory(),
-            shortTermContext = listOf(ChatMessage(ChatRole.SYSTEM, "старый системный prompt"))
+            workingMemory = WorkingMemory()
         )
 
         assertEquals(
-            ChatMessage(
-                ChatRole.SYSTEM,
-                """
-                Ты помощник.
+            """
+            Профиль пользователя (Default)
 
-                Профиль пользователя (Default)
+            Это обязательные правила ответа для текущего пользователя.
+            Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
+            Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
 
-                Это обязательные правила ответа для текущего пользователя.
-                Автоматически применяй их в каждом ответе, если пользователь явно не попросил иначе.
-                Если предыдущие сообщения в этой сессии оформлены иначе, всё равно следуй профилю в новом ответе.
+            Приоритет:
+            - Текущее сообщение пользователя важнее профиля.
+            - Профиль важнее стандартного поведения ассистента.
+            - Профиль важнее инерции предыдущих ответов в диалоге.
 
-                Приоритет:
-                - Текущее сообщение пользователя важнее профиля.
-                - Профиль важнее стандартного поведения ассистента.
-                - Профиль важнее инерции предыдущих ответов в диалоге.
-
-                Правила ответа
-                - Отвечай строго по делу.
-                """.trimIndent()
-            ),
-            prompt.first()
+            Правила ответа
+            - Отвечай строго по делу.
+            """.trimIndent(),
+            contribution
         )
+    }
+
+    @Test
+    fun `returns null when memory contribution is empty`() {
+        val contribution = assembler.assembleContribution(
+            activeUser = UserAccount("default", "Default"),
+            longTermMemory = LongTermMemory(),
+            workingMemory = WorkingMemory()
+        )
+
+        assertNull(contribution)
     }
 }

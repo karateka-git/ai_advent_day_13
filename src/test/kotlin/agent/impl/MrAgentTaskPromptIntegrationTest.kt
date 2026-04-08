@@ -5,9 +5,10 @@ import agent.task.core.DefaultTaskManager
 import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
+import agent.task.model.TaskStages
 import kotlin.test.Test
-import kotlin.test.assertNotNull
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import llm.core.LanguageModel
 import llm.core.model.ChatMessage
@@ -26,9 +27,9 @@ class MrAgentTaskPromptIntegrationTest {
             lifecycleListener = NoOpAgentLifecycleListener,
             taskManager = DefaultTaskManager(
                 initialTask = TaskState(
-                    title = "Реализовать task subsystem",
+                    title = "Implement task subsystem",
                     stage = TaskStage.EXECUTION,
-                    currentStep = "Подключить task prompt",
+                    currentStep = "Connect task prompt",
                     expectedAction = ExpectedAction.AGENT_EXECUTION
                 )
             )
@@ -37,12 +38,16 @@ class MrAgentTaskPromptIntegrationTest {
         val response = agent.ask("Привет")
 
         assertEquals("ok", response.content)
+        val allMessages = languageModel.lastMessages.joinToString(separator = "\n---\n") { message ->
+            "${message.role}: ${message.content}"
+        }
         val systemMessage = languageModel.lastMessages.first()
         assertEquals(ChatRole.SYSTEM, systemMessage.role)
-        assertTrue(systemMessage.content.contains("Task state"))
-        assertTrue(systemMessage.content.contains("Реализовать task subsystem"))
-        assertTrue(systemMessage.content.contains("Выполнение"))
-        assertTrue(systemMessage.content.contains("agent_execution"))
+        assertTrue(systemMessage.content.contains("Task state"), allMessages)
+        assertTrue(systemMessage.content.contains("Implement task subsystem"), allMessages)
+        assertTrue(systemMessage.content.contains("- Stage: ${TaskStages.definitionFor(TaskStage.EXECUTION).label}"), allMessages)
+        assertTrue(systemMessage.content.contains("- Expected action: agent_execution"), allMessages)
+        assertTrue(systemMessage.content.contains("- Current step: Connect task prompt"), allMessages)
     }
 
     @Test
@@ -55,9 +60,9 @@ class MrAgentTaskPromptIntegrationTest {
             lifecycleListener = NoOpAgentLifecycleListener,
             taskManager = DefaultTaskManager(
                 initialTask = TaskState(
-                    title = "Реализовать task subsystem",
+                    title = "Implement task subsystem",
                     stage = TaskStage.EXECUTION,
-                    currentStep = "Подключить task prompt",
+                    currentStep = "Connect task prompt",
                     expectedAction = ExpectedAction.AGENT_EXECUTION
                 )
             )

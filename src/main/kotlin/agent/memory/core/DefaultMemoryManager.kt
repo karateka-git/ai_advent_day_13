@@ -1,7 +1,6 @@
 package agent.memory.core
 
 import agent.capability.AgentCapability
-import agent.core.AgentTokenStats
 import agent.lifecycle.AgentLifecycleListener
 import agent.lifecycle.NoOpAgentLifecycleListener
 import agent.memory.layer.DefaultMemoryConfirmationPolicy
@@ -36,6 +35,7 @@ import agent.memory.persistence.MemoryStateRepository
 import agent.memory.prompt.DefaultMemoryContextService
 import agent.memory.prompt.LayeredMemoryPromptAssembler
 import agent.memory.prompt.MemoryContextService
+import agent.memory.prompt.MemoryPromptContext
 import agent.memory.strategy.MemoryStrategyType
 import agent.memory.strategy.branching.BranchCoordinator
 import agent.memory.strategy.branching.BranchingMemoryCapabilityAdapter
@@ -45,9 +45,15 @@ import llm.core.LanguageModel
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
 
+/**
+ * Основная реализация layered memory manager.
+ *
+ * После перехода на `AgentPromptAssembler` short-term слой хранит только runtime-сообщения диалога
+ * без базового system prompt агента. Финальный `system message` создаётся только на orchestration-
+ * слое, а memory subsystem отдаёт лишь runtime history и memory contribution.
+ */
 class DefaultMemoryManager(
     private val languageModel: LanguageModel,
-    private val systemPrompt: String,
     private val memoryStateRepository: MemoryStateRepository = JsonMemoryStateRepository.forLanguageModel(languageModel),
     private val memoryStrategy: MemoryStrategy = NoCompressionMemoryStrategy(),
     private val lifecycleListener: AgentLifecycleListener = NoOpAgentLifecycleListener,
@@ -77,39 +83,18 @@ class DefaultMemoryManager(
 
     override fun currentConversation(): List<ChatMessage> = state.shortTerm.rawMessages.toList()
 
-    override fun effectiveConversation(): List<ChatMessage> =
-        contextService.effectiveConversation(systemPrompt, state)
+    override fun effectivePromptContext(): MemoryPromptContext =
+        contextService.effectivePromptContext(state)
 
-    override fun previewTokenStats(userPrompt: String): AgentTokenStats {
-        val effectiveConversation = effectiveConversation()
-        val historyTokens = languageModel.tokenCounter?.countMessages(effectiveConversation)
-        val userPromptTokens = languageModel.tokenCounter?.countText(userPrompt)
-        val promptTokensLocal = contextService.countPromptTokens(
-            languageModel = languageModel,
-            systemPrompt = systemPrompt,
-            state = previewStateForUserPrompt(userPrompt)
-        )
+    override fun previewPromptContext(userPrompt: String): MemoryPromptContext =
+        contextService.previewPromptContext(previewStateForUserPrompt(userPrompt))
 
-        return AgentTokenStats(
-            historyTokens = historyTokens,
-            promptTokensLocal = promptTokensLocal,
-            userPromptTokens = userPromptTokens
-        )
-    }
-
-    override fun previewConversation(userPrompt: String): List<ChatMessage> =
-        contextService.previewConversation(
-            systemPrompt = systemPrompt,
-            state = previewStateForUserPrompt(userPrompt)
-        )
-
-    override fun appendUserMessage(userPrompt: String): List<ChatMessage> {
+    override fun appendUserMessage(userPrompt: String) {
         val userMessage = ChatMessage(role = ChatRole.USER, content = userPrompt)
         val stateWithMessage = appendShortTermMessage(state, userMessage)
         val stateWithCandidates = processCandidatesIfAllowed(stateWithMessage, userMessage)
         state = refreshState(stateWithCandidates, notifyCompression = true)
         saveState()
-        return effectiveConversation()
     }
 
     override fun appendAssistantMessage(content: String) {
@@ -127,7 +112,6 @@ class DefaultMemoryManager(
     override fun clear() {
         state = clearPolicy.clear(
             state = state,
-            systemMessage = createSystemMessage(),
             memoryStrategy = memoryStrategy
         )
         saveState()
@@ -135,11 +119,7 @@ class DefaultMemoryManager(
 
     override fun replaceContextFromFile(sourcePath: Path) {
         val importedState = memoryStateRepository.loadFrom(sourcePath)
-        require(importedState.shortTerm.rawMessages.isNotEmpty()) {
-            "Файл истории $sourcePath пустой или не содержит сообщений."
-        }
-
-        state = memoryStrategy.refreshState(importedState, MemoryStateRefreshMode.REGULAR)
+        state = memoryStrategy.refreshState(normalizeUsers(importedState), MemoryStateRefreshMode.REGULAR)
         saveState()
     }
 
@@ -339,7 +319,7 @@ class DefaultMemoryManager(
 
     private fun loadMemoryState(): MemoryState {
         val savedState = memoryStateRepository.load()
-        if (savedState.shortTerm.rawMessages.isNotEmpty()) {
+        if (savedState != MemoryState()) {
             val normalizedState = normalizeUsers(savedState)
             val refreshedState = memoryStrategy.refreshState(normalizedState, MemoryStateRefreshMode.REGULAR)
             if (refreshedState != savedState) {
@@ -349,11 +329,7 @@ class DefaultMemoryManager(
         }
 
         val initialState = memoryStrategy.refreshState(
-            MemoryState(
-                shortTerm = ShortTermMemory(
-                    rawMessages = listOf(createSystemMessage())
-                )
-            ),
+            MemoryState(),
             MemoryStateRefreshMode.REGULAR
         )
         saveState(initialState)
@@ -378,12 +354,6 @@ class DefaultMemoryManager(
         state = updatedState
         memoryStateRepository.save(state)
     }
-
-    private fun createSystemMessage(): ChatMessage =
-        ChatMessage(
-            role = ChatRole.SYSTEM,
-            content = systemPrompt
-        )
 
     private fun previewStateForUserPrompt(userPrompt: String): MemoryState {
         val userMessage = ChatMessage(role = ChatRole.USER, content = userPrompt)
@@ -420,12 +390,17 @@ class DefaultMemoryManager(
         return refreshedState
     }
 
-    private fun countPromptTokens(state: MemoryState): Int? =
-        contextService.countPromptTokens(
-            languageModel = languageModel,
-            systemPrompt = systemPrompt,
-            state = state
-        )
+    private fun countPromptTokens(state: MemoryState): Int? {
+        val promptContext = contextService.effectivePromptContext(state)
+        val conversation =
+            promptContext.systemPromptContribution
+                ?.takeIf(String::isNotBlank)
+                ?.let { contribution ->
+                    listOf(ChatMessage(role = ChatRole.SYSTEM, content = contribution)) + promptContext.messages
+                }
+                ?: promptContext.messages
+        return languageModel.tokenCounter?.countMessages(conversation)
+    }
 
     private fun appendShortTermMessage(currentState: MemoryState, message: ChatMessage): MemoryState =
         currentState.copy(
@@ -573,4 +548,5 @@ class DefaultMemoryManager(
             .replace(Regex("[^a-z0-9_-]+"), "-")
             .trim('-')
             .ifBlank { error("Идентификатор пользователя не должен быть пустым.") }
+
 }

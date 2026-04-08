@@ -3,6 +3,7 @@ package agent.task.core
 import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
+import agent.task.prompt.TaskPromptContext
 
 /**
  * Управляет одной текущей задачей в рамках первого этапа task subsystem.
@@ -12,6 +13,13 @@ interface TaskManager {
      * Возвращает текущую задачу или `null`, если она ещё не создана.
      */
     fun currentTask(): TaskState?
+
+    /**
+     * Возвращает task-derived данные для итогового system prompt.
+     *
+     * @return prompt context текущей задачи без прямой модификации `system message`.
+     */
+    fun promptContext(): TaskPromptContext
 
     /**
      * Создаёт новую текущую задачу.

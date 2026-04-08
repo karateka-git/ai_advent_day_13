@@ -1,40 +1,28 @@
 package agent.memory.prompt
 
 import agent.memory.model.MemoryState
-import llm.core.LanguageModel
-import llm.core.model.ChatMessage
-
 /**
- * Собирает effective и preview context для текущего layered memory state.
+ * Собирает memory-вклад в финальный prompt для текущего layered memory state.
  */
 interface MemoryContextService {
     /**
-     * Строит фактический prompt для текущего runtime-состояния памяти.
+     * Строит prompt context для текущего runtime-состояния памяти.
      *
-     * @param systemPrompt базовый системный prompt агента.
+     * Это контекст, который модель увидит без добавления нового пользовательского сообщения.
+     *
      * @param state текущее layered memory state.
-     * @return итоговый список сообщений для модели.
+     * @return сообщения short-term стратегии и memory contribution для system prompt.
      */
-    fun effectiveConversation(systemPrompt: String, state: MemoryState): List<ChatMessage>
+    fun effectivePromptContext(state: MemoryState): MemoryPromptContext
 
     /**
-     * Строит preview prompt для переданного состояния, как если бы оно было отправлено в модель.
+     * Строит preview prompt context для состояния, в которое уже мысленно добавлено следующее
+     * пользовательское сообщение.
      *
-     * @param systemPrompt базовый системный prompt агента.
      * @param state состояние памяти для preview.
-     * @return итоговый preview-контекст.
+     * @return preview-сообщения и memory contribution для system prompt.
      */
-    fun previewConversation(systemPrompt: String, state: MemoryState): List<ChatMessage>
-
-    /**
-     * Считает локальные prompt tokens для указанного состояния памяти.
-     *
-     * @param languageModel модель, чей token counter нужно использовать.
-     * @param systemPrompt базовый системный prompt агента.
-     * @param state состояние памяти, которое нужно превратить в prompt.
-     * @return локально рассчитанное число токенов или `null`, если token counter недоступен.
-     */
-    fun countPromptTokens(languageModel: LanguageModel, systemPrompt: String, state: MemoryState): Int?
+    fun previewPromptContext(state: MemoryState): MemoryPromptContext
 }
 
 /**
@@ -45,41 +33,27 @@ class DefaultMemoryContextService(
     private val promptAssembler: LayeredMemoryPromptAssembler = LayeredMemoryPromptAssembler()
 ) : MemoryContextService {
     /**
-     * Собирает effective prompt из system prompt, working/long-term memory и short-term context стратегии.
+     * Собирает effective memory context из short-term стратегии и отдельного memory contribution.
      *
-     * @param systemPrompt базовый системный prompt агента.
      * @param state текущее layered memory state.
-     * @return итоговый список сообщений для модели.
+     * @return сообщения стратегии и memory contribution для system prompt.
      */
-    override fun effectiveConversation(systemPrompt: String, state: MemoryState): List<ChatMessage> =
-        promptAssembler.assemble(
-            systemPrompt = systemPrompt,
-            activeUser = state.activeUser(),
-            longTermMemory = state.longTerm,
-            workingMemory = state.working,
-            shortTermContext = memoryStrategyProvider().effectiveContext(state)
+    override fun effectivePromptContext(state: MemoryState): MemoryPromptContext =
+        MemoryPromptContext(
+            messages = memoryStrategyProvider().effectiveContext(state),
+            systemPromptContribution = promptAssembler.assembleContribution(
+                activeUser = state.activeUser(),
+                longTermMemory = state.longTerm,
+                workingMemory = state.working
+            )
         )
 
     /**
-     * Для preview использует тот же assembled prompt, но работает на заранее подготовленном preview state.
+     * Для preview использует тот же memory contribution, но работает на заранее подготовленном preview state.
      *
-     * @param systemPrompt базовый системный prompt агента.
      * @param state состояние памяти для preview.
-     * @return итоговый preview-контекст.
+     * @return preview-сообщения и memory contribution для system prompt.
      */
-    override fun previewConversation(systemPrompt: String, state: MemoryState): List<ChatMessage> =
-        effectiveConversation(systemPrompt, state)
-
-    /**
-     * Считает токены assembled prompt для переданного состояния памяти.
-     *
-     * @param languageModel модель, чей token counter нужно использовать.
-     * @param systemPrompt базовый системный prompt агента.
-     * @param state состояние памяти для assembled prompt.
-     * @return локально рассчитанное число токенов или `null`, если token counter отсутствует.
-     */
-    override fun countPromptTokens(languageModel: LanguageModel, systemPrompt: String, state: MemoryState): Int? =
-        languageModel.tokenCounter?.countMessages(
-            effectiveConversation(systemPrompt, state)
-        )
+    override fun previewPromptContext(state: MemoryState): MemoryPromptContext =
+        effectivePromptContext(state)
 }

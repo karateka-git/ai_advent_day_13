@@ -1,0 +1,9 @@
+/task show
+/task resume
+/task stage completion
+/task show
+/task done
+/user create reviewer Reviewer
+/user use reviewer
+/task show
+/exit

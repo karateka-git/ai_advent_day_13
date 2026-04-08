@@ -1,4 +1,4 @@
-﻿package agent.memory.strategy.summary
+package agent.memory.strategy.summary
 
 import agent.memory.core.MemoryStateRefreshMode
 import agent.memory.core.MemoryStrategy
@@ -14,7 +14,8 @@ import llm.core.model.ChatRole
  * Стратегия памяти, которая хранит rolling summary поверх полной истории сообщений
  * и отправляет в модель summary вместе с ещё не покрытым хвостом диалога.
  *
- * Переопределяет `refreshState`, потому что должна пересчитывать rolling summary и количество сообщений, уже покрытых этим summary.
+ * Переопределяет `refreshState`, потому что должна пересчитывать rolling summary и количество
+ * сообщений, уже покрытых этим summary.
  */
 class SummaryCompressionMemoryStrategy(
     private val recentMessagesCount: Int,
@@ -40,7 +41,6 @@ class SummaryCompressionMemoryStrategy(
         mode: MemoryStateRefreshMode
     ): MemoryState {
         if (mode == MemoryStateRefreshMode.PREVIEW) {
-            // Preview token estimation must stay local and must not trigger summarizer side effects.
             return rebuildDerivedMessages(state)
         }
 
@@ -48,8 +48,8 @@ class SummaryCompressionMemoryStrategy(
         var currentState = preparedState
 
         while (true) {
-            val dialogMessages = currentState.shortTerm.rawMessages.filter { it.role != ChatRole.SYSTEM }
-            val uncompressedMessages = dialogMessages.drop(coveredMessagesCount(currentState))
+            val rawMessages = currentState.shortTerm.rawMessages
+            val uncompressedMessages = rawMessages.drop(coveredMessagesCount(currentState))
             val messagesEligibleForCompression = uncompressedMessages.dropLastSafe(recentMessagesCount)
 
             if (messagesEligibleForCompression.size < summaryBatchSize) {
@@ -83,7 +83,7 @@ class SummaryCompressionMemoryStrategy(
             return state
         }
 
-        val dialogMessages = state.shortTerm.rawMessages.filter { it.role != ChatRole.SYSTEM }
+        val dialogMessages = state.shortTerm.rawMessages
         val activationWindowSize = recentMessagesCount + summaryBatchSize
         val coveredMessagesCount = (dialogMessages.size - activationWindowSize).coerceAtLeast(0)
 
@@ -98,17 +98,14 @@ class SummaryCompressionMemoryStrategy(
 
     private fun rebuildDerivedMessages(state: MemoryState): MemoryState {
         val rawMessages = state.shortTerm.rawMessages
-        val systemMessages = rawMessages.filter { it.role == ChatRole.SYSTEM }
-        val dialogMessages = rawMessages.filter { it.role != ChatRole.SYSTEM }
         val coveredMessagesCount = coveredMessagesCount(state)
-        val uncompressedTail = dialogMessages.drop(coveredMessagesCount)
+        val uncompressedTail = rawMessages.drop(coveredMessagesCount)
         val summary = summary(state)
         val derivedMessages =
             if (summary == null && coveredMessagesCount == 0) {
                 rawMessages
             } else {
                 buildList {
-                    addAll(systemMessages)
                     summary?.let(::toSummaryMessage)?.let(::add)
                     addAll(uncompressedTail)
                 }
@@ -123,18 +120,11 @@ class SummaryCompressionMemoryStrategy(
         )
     }
 
-    /**
-     * Возвращает абсолютное количество сообщений, уже покрытых summary или пропущенных
-     * при позднем включении стратегии.
-     */
     private fun coveredMessagesCount(state: MemoryState): Int =
         summaryState(state)?.summary?.coveredMessagesCount
             ?: summaryState(state)?.coveredMessagesCount
             ?: 0
 
-    /**
-     * Возвращает strategy-specific summary state только если он совместим с текущей стратегией.
-     */
     private fun summary(state: MemoryState): ConversationSummary? =
         summaryState(state)?.summary
 
@@ -142,9 +132,6 @@ class SummaryCompressionMemoryStrategy(
         (state.shortTerm.strategyState as? SummaryStrategyState)
             ?.takeIf { it.strategyType == type }
 
-    /**
-     * Объединяет текущее rolling summary со следующей порцией старых несжатых сообщений.
-     */
     private fun buildUpdatedSummary(
         existingSummary: ConversationSummary?,
         nextBatch: List<ChatMessage>
@@ -164,18 +151,12 @@ class SummaryCompressionMemoryStrategy(
         return summarizer.summarize(messagesForSummary)
     }
 
-    /**
-     * Оборачивает сохранённый текст summary в системное сообщение для effective prompt.
-     */
     private fun toSummaryMessage(summary: ConversationSummary): ChatMessage =
         ChatMessage(
             role = ChatRole.SYSTEM,
             content = "Краткое резюме предыдущего диалога:\n${summary.content}"
         )
 
-    /**
-     * Безопасно отбрасывает хвост нужной длины, даже если список короче указанного количества.
-     */
     private fun <T> List<T>.dropLastSafe(count: Int): List<T> =
         if (count >= size) {
             emptyList()
@@ -183,5 +164,3 @@ class SummaryCompressionMemoryStrategy(
             dropLast(count)
         }
 }
-
-

@@ -4,7 +4,9 @@ import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStatus
+import agent.task.model.TaskStages
 import agent.task.persistence.TaskStateRepository
+import agent.task.prompt.TaskPromptContext
 
 /**
  * In-memory реализация [TaskManager] для первого этапа task subsystem.
@@ -19,6 +21,11 @@ class DefaultTaskManager(
     private var current: TaskState? = initialTask ?: repository?.load()
 
     override fun currentTask(): TaskState? = current
+
+    override fun promptContext(): TaskPromptContext =
+        TaskPromptContext(
+            systemPromptContribution = current?.let(::buildPromptContribution)
+        )
 
     override fun startTask(title: String): TaskState {
         require(title.isNotBlank()) { "Название задачи не должно быть пустым." }
@@ -94,4 +101,38 @@ class DefaultTaskManager(
         current = task
         repository?.save(task)
     }
+
+    /**
+     * Формирует task-derived contribution для итогового system prompt.
+     *
+     * На этапе 1 task subsystem сама определяет, какой компактный контекст о текущей задаче нужен
+     * модели, но не модифицирует `system message` напрямую.
+     */
+    private fun buildPromptContribution(taskState: TaskState): String {
+        val stageDefinition = TaskStages.definitionFor(taskState.stage)
+        return buildString {
+            appendLine("Task state")
+            appendLine("- Title: ${taskState.title}")
+            appendLine("- Stage: ${stageDefinition.label}")
+            appendLine("- Status: ${statusLabel(taskState.status)}")
+            appendLine("- Expected action: ${expectedActionLabel(taskState.expectedAction)}")
+            appendLine("- Stage details: ${stageDefinition.description}")
+            append("- Current step: ${taskState.currentStep ?: "(not specified)"}")
+        }
+    }
+
+    private fun statusLabel(status: TaskStatus): String =
+        when (status) {
+            TaskStatus.ACTIVE -> "active"
+            TaskStatus.PAUSED -> "paused"
+            TaskStatus.DONE -> "done"
+        }
+
+    private fun expectedActionLabel(action: ExpectedAction): String =
+        when (action) {
+            ExpectedAction.USER_INPUT -> "user_input"
+            ExpectedAction.AGENT_EXECUTION -> "agent_execution"
+            ExpectedAction.USER_CONFIRMATION -> "user_confirmation"
+            ExpectedAction.NONE -> "none"
+        }
 }

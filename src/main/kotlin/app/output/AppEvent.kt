@@ -156,6 +156,16 @@ sealed interface AppEvent {
         val role: ChatRole
     ) : AppEvent
 
+    /**
+     * Фактически полученный пользовательский ввод.
+     *
+     * Нужен для debug/smoke trace и не обязан отображаться в основном UI.
+     */
+    data class UserInputReceived(
+        val role: ChatRole,
+        val content: String
+    ) : AppEvent
+
     data class AssistantResponseAvailable(
         val role: ChatRole,
         val content: String,
@@ -164,6 +174,13 @@ sealed interface AppEvent {
 
     data class TokenPreviewAvailable(
         val tokenStats: AgentTokenStats
+    ) : AppEvent
+
+    /**
+     * Debug-представление assembled prompt, который будет отправлен в модель.
+     */
+    data class ModelPromptAvailable(
+        val prompt: String
     ) : AppEvent
 
     data object ContextCleared : AppEvent

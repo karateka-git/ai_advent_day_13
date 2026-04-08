@@ -161,6 +161,46 @@ class CliSessionControllerTest {
     }
 
     @Test
+    fun `regular prompt does not mutate paused task state`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent().apply {
+            taskState = requireTaskState().copy(status = TaskStatus.PAUSED)
+        }
+        val expectedTaskState = requireNotNull(taskStateOrNull(agent))
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("Обычное сообщение без /task во время paused-задачи")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(expectedTaskState, agent.taskState)
+    }
+
+    @Test
+    fun `switching active user does not mutate current task state`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent()
+        val expectedTaskState = requireNotNull(taskStateOrNull(agent))
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("/user use reviewer")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(expectedTaskState, agent.taskState)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.CommandCompleted("Активный пользователь переключён на reviewer (reviewer).")
+            ),
+            sink.events
+        )
+    }
+
+    @Test
     fun `adds memory note through current agent`() {
         val sink = RecordingAppEventSink()
         val controller = createController(sink = sink)
@@ -299,9 +339,29 @@ class CliSessionControllerTest {
         )
     }
 
+    @Test
+    fun `emits model prompt for regular prompt when debug flag is enabled`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent(
+            previewTokenStats = AgentTokenStats(historyTokens = 10),
+            previewModelPrompt = "System:\nBase prompt\n\nUser:\nОбычное сообщение"
+        )
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent),
+            showModelPrompt = true
+        )
+
+        val result = controller.handle("Обычное сообщение")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(AppEvent.ModelPromptAvailable("System:\nBase prompt\n\nUser:\nОбычное сообщение"), sink.events[1])
+    }
+
     private fun createController(
         sink: RecordingAppEventSink = RecordingAppEventSink(),
         initialState: CliSessionState = initialState(),
+        showModelPrompt: Boolean = false,
         createLanguageModel: (String, Properties, HttpClient) -> LanguageModel = { _, _, _ ->
             throw AssertionError("Не должен вызываться в этом тесте.")
         },
@@ -315,6 +375,7 @@ class CliSessionControllerTest {
             httpClient = httpClient,
             lifecycleListener = lifecycleListener,
             appEventSink = sink,
+            showModelPrompt = showModelPrompt,
             createLanguageModel = createLanguageModel,
             availableModelsProvider = { emptyList() },
             createAgent = createAgent,
@@ -333,6 +394,8 @@ class CliSessionControllerTest {
             agent = agent,
             memoryStrategyOption = strategyOption
         )
+
+    private fun taskStateOrNull(agent: FakeAgent): TaskState? = agent.taskState
 }
 
 private class RecordingAppEventSink : AppEventSink {
@@ -345,6 +408,7 @@ private class RecordingAppEventSink : AppEventSink {
 
 private class FakeAgent(
     private val previewTokenStats: AgentTokenStats = AgentTokenStats(),
+    private val previewModelPrompt: String = "System:\nBase prompt",
     private val response: AgentResponse<String> = AgentResponse(
         content = "ok",
         tokenStats = AgentTokenStats()
@@ -371,6 +435,8 @@ private class FakeAgent(
     override val responseFormat: ResponseFormat<String> = TextResponseFormat
 
     override fun previewTokenStats(userPrompt: String): AgentTokenStats = previewTokenStats
+
+    override fun previewModelPrompt(userPrompt: String): String = previewModelPrompt
 
     override fun ask(userPrompt: String): AgentResponse<String> {
         currentPendingState = pendingStateAfterAsk
@@ -489,7 +555,7 @@ private class FakeAgent(
 
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? = null
 
-    private fun requireTaskState(): TaskState =
+    fun requireTaskState(): TaskState =
         requireNotNull(taskState) { "Текущая задача в тестовом агенте не создана." }
 
     companion object {

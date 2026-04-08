@@ -12,10 +12,9 @@ import llm.core.model.ChatRole
 
 class SlidingWindowMemoryStrategyTest {
     @Test
-    fun `returns system messages and recent dialog tail`() {
+    fun `returns recent dialog tail`() {
         val strategy = SlidingWindowMemoryStrategy(recentMessagesCount = 2)
         val messages = listOf(
-            ChatMessage(role = ChatRole.SYSTEM, content = "system"),
             ChatMessage(role = ChatRole.USER, content = "u1"),
             ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
             ChatMessage(role = ChatRole.USER, content = "u2"),
@@ -32,7 +31,6 @@ class SlidingWindowMemoryStrategyTest {
 
         assertEquals(
             listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "system"),
                 ChatMessage(role = ChatRole.USER, content = "u2"),
                 ChatMessage(role = ChatRole.ASSISTANT, content = "a2")
             ),
@@ -44,7 +42,6 @@ class SlidingWindowMemoryStrategyTest {
     fun `ignores stored summary and uses full history tail`() {
         val strategy = SlidingWindowMemoryStrategy(recentMessagesCount = 2)
         val messages = listOf(
-            ChatMessage(role = ChatRole.SYSTEM, content = "system"),
             ChatMessage(role = ChatRole.USER, content = "u1"),
             ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
             ChatMessage(role = ChatRole.USER, content = "u2")
@@ -67,7 +64,6 @@ class SlidingWindowMemoryStrategyTest {
 
         assertEquals(
             listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "system"),
                 ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
                 ChatMessage(role = ChatRole.USER, content = "u2")
             ),

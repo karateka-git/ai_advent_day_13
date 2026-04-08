@@ -34,6 +34,14 @@ interface Agent<T> {
     fun previewTokenStats(userPrompt: String): AgentTokenStats
 
     /**
+     * Возвращает assembled prompt для гипотетического следующего пользовательского сообщения.
+     *
+     * Используется только в debug- и smoke-сценариях, чтобы показать фактический запрос,
+     * который будет отправлен в модель, без выполнения model request.
+     */
+    fun previewModelPrompt(userPrompt: String): String
+
+    /**
      * Отправляет пользовательский prompt агенту и возвращает ответ в целевом формате.
      *
      * @param userPrompt текст нового пользовательского сообщения.

@@ -34,7 +34,6 @@ class DefaultStrategyConversationExecutor(
 
         val memoryManager = DefaultMemoryManager(
             languageModel = tracingLanguageModel,
-            systemPrompt = buildSystemPrompt(),
             memoryStateRepository = JsonMemoryStateRepository(JsonConversationStore(storagePath)),
             memoryStrategy = strategy,
             lifecycleListener = NoOpAgentLifecycleListener

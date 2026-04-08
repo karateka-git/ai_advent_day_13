@@ -17,3 +17,5 @@
 - `sliding-window.txt`
 - `sticky-facts.txt`
 - `branching.txt`
+- `task-state-stage1-setup.txt`
+- `task-state-stage1-verify.txt`

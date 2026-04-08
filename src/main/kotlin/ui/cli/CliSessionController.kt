@@ -34,6 +34,7 @@ class CliSessionController(
     private val lifecycleListener: AgentLifecycleListener,
     private val appEventSink: AppEventSink,
     private val commandParser: CliCommandParser = CliCommandParser(),
+    private val showModelPrompt: Boolean = false,
     private val createLanguageModel: (String, Properties, HttpClient) -> LanguageModel,
     private val availableModelsProvider: (Properties) -> List<LanguageModelOption> = LanguageModelFactory::availableModels,
     private val createAgent: (LanguageModel, AgentLifecycleListener, MemoryStrategyType) -> Agent<String>,
@@ -462,6 +463,9 @@ class CliSessionController(
                 try {
                     val pendingBefore = state.agent.inspectPendingMemory().candidates.size
                     appEventSink.emit(AppEvent.TokenPreviewAvailable(state.agent.previewTokenStats(command.value)))
+                    if (showModelPrompt) {
+                        appEventSink.emit(AppEvent.ModelPromptAvailable(state.agent.previewModelPrompt(command.value)))
+                    }
                     appEventSink.emit(AppEvent.ModelRequestStarted)
                     val response = try {
                         state.agent.ask(command.value)

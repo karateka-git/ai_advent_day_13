@@ -6,6 +6,9 @@ import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
 import app.output.AppEvent
 import app.output.AppEventSink
+import app.output.CompositeAppEventSink
+import app.output.DebugTraceListener
+import java.nio.file.Path
 import bootstrap.AgentFactory
 import bootstrap.ApplicationBootstrap
 import java.io.BufferedReader
@@ -38,7 +41,7 @@ fun main() {
         config = runtime.config,
         httpClient = runtime.httpClient
     )
-    val appEventSink: AppEventSink = CliRenderer()
+    val appEventSink: AppEventSink = buildAppEventSink()
     val lifecycleListener: AgentLifecycleListener = AppEventLifecycleListener(appEventSink)
     val languageModel = runtime.languageModel
     ApplicationBootstrap.warmUpTokenCounter(
@@ -65,6 +68,7 @@ fun main() {
         httpClient = runtime.httpClient,
         lifecycleListener = lifecycleListener,
         appEventSink = appEventSink,
+        showModelPrompt = shouldShowModelPrompt(),
         createLanguageModel = LanguageModelFactory::create,
         createAgent = { model, listener, strategyType ->
             createAgent(agentFactory, model, listener, strategyType)
@@ -92,6 +96,7 @@ fun main() {
     while (true) {
         appEventSink.emit(AppEvent.UserInputPrompt(ChatRole.USER))
         val prompt = readConsoleLine()?.trim() ?: break
+        appEventSink.emit(AppEvent.UserInputReceived(ChatRole.USER, prompt))
 
         when (sessionController.handle(prompt)) {
             CliSessionControllerResult.Continue -> continue
@@ -99,6 +104,27 @@ fun main() {
         }
     }
 }
+
+private fun buildAppEventSink(): AppEventSink {
+    val sinks = mutableListOf<AppEventSink>(CliRenderer())
+    debugTracePath()?.let { sinks += DebugTraceListener(it) }
+    return if (sinks.size == 1) sinks.single() else CompositeAppEventSink(sinks)
+}
+
+private fun shouldShowModelPrompt(): Boolean =
+    System.getProperty("debug.showModelPrompt")
+        ?.toBooleanStrictOrNull()
+        ?: System.getenv("DEBUG_SHOW_MODEL_PROMPT")
+            ?.toBooleanStrictOrNull()
+        ?: false
+
+private fun debugTracePath(): Path? =
+    System.getProperty("debug.traceFile")
+        ?.takeIf(String::isNotBlank)
+        ?.let(Path::of)
+        ?: System.getenv("DEBUG_TRACE_FILE")
+            ?.takeIf(String::isNotBlank)
+            ?.let(Path::of)
 
 /**
  * Создаёт новый экземпляр агента для выбранной модели и стратегии памяти.

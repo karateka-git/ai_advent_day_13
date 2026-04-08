@@ -155,7 +155,7 @@
 
 Новый prompt-слой:
 
-- `TaskPromptAssembler`
+- `TaskPromptContext`
 - компактно формирует task context для LLM
 
 Дополнительная инфраструктура stage:

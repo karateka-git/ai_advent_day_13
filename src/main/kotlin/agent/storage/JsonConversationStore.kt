@@ -20,6 +20,7 @@ class JsonConversationStore(
         classDiscriminator = "strategyType"
         ignoreUnknownKeys = true
         prettyPrint = true
+        encodeDefaults = true
     }
 
     override fun loadState(): ConversationMemoryState {

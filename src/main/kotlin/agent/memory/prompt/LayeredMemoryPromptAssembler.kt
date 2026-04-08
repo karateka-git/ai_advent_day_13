@@ -5,89 +5,60 @@ import agent.memory.model.MemoryNote
 import agent.memory.model.MemoryOwnerType
 import agent.memory.model.UserAccount
 import agent.memory.model.WorkingMemory
-import llm.core.model.ChatMessage
-import llm.core.model.ChatRole
 
 /**
- * Собирает итоговый system prompt из базового prompt'а и semantic views памяти.
+ * Собирает memory-вклад в system prompt из semantic views памяти.
  */
 class LayeredMemoryPromptAssembler {
     /**
-     * Формирует conversation для модели, внедряя assembled system prompt в short-term контекст.
+     * Формирует текстовый contribution-блок для system prompt без прямой модификации самого system message.
      *
-     * @param systemPrompt базовый системный prompt ассистента.
      * @param activeUser активный пользователь текущей сессии.
      * @param longTermMemory долговременная память со смешанными global- и user-scoped заметками.
      * @param workingMemory рабочая память текущей задачи.
-     * @param shortTermContext short-term контекст, подготовленный стратегией памяти.
-     * @return итоговый список сообщений для отправки в LLM.
+     * @return текстовый contribution для system prompt или `null`, если memory-блоков нет.
      */
-    fun assemble(
-        systemPrompt: String,
+    fun assembleContribution(
         activeUser: UserAccount,
         longTermMemory: LongTermMemory,
-        workingMemory: WorkingMemory,
-        shortTermContext: List<ChatMessage>
-    ): List<ChatMessage> {
-        val layeredSystemPrompt = buildLayeredSystemPrompt(
-            systemPrompt = systemPrompt,
+        workingMemory: WorkingMemory
+    ): String? =
+        buildLayeredSystemPrompt(
             activeUser = activeUser,
             longTermMemory = longTermMemory,
             workingMemory = workingMemory
         )
-        val firstSystemIndex = shortTermContext.indexOfFirst { it.role == ChatRole.SYSTEM }
-
-        return if (firstSystemIndex >= 0) {
-            shortTermContext.mapIndexed { index, message ->
-                if (index == firstSystemIndex) {
-                    message.copy(content = layeredSystemPrompt)
-                } else {
-                    message
-                }
-            }
-        } else {
-            listOf(ChatMessage(role = ChatRole.SYSTEM, content = layeredSystemPrompt)) + shortTermContext
-        }
-    }
 
     /**
-     * Строит финальный текст system prompt с отдельным блоком пользовательского профиля.
+     * Строит итоговый memory contribution с отдельным блоком пользовательского профиля.
      */
     private fun buildLayeredSystemPrompt(
-        systemPrompt: String,
         activeUser: UserAccount,
         longTermMemory: LongTermMemory,
         workingMemory: WorkingMemory
-    ): String {
+    ): String? {
         val profileNotes = longTermMemory.notes.filter {
             it.ownerType == MemoryOwnerType.USER && it.ownerId == activeUser.id
         }
         val sharedLongTermNotes = longTermMemory.notes.filter { it.ownerType == MemoryOwnerType.GLOBAL }
 
-        return buildString {
-            append(systemPrompt.trim())
-
-            formatUserProfileSection(activeUser, profileNotes)?.let {
-                append("\n\n")
-                append(it)
-            }
-
+        val sections = listOfNotNull(
+            formatUserProfileSection(activeUser, profileNotes),
             formatNotesSection(
                 title = "Long-term memory",
                 notes = sharedLongTermNotes
-            )?.let {
-                append("\n\n")
-                append(it)
-            }
-
+            ),
             formatNotesSection(
                 title = "Working memory",
                 notes = workingMemory.notes
-            )?.let {
-                append("\n\n")
-                append(it)
-            }
+            )
+        )
+
+        if (sections.isEmpty()) {
+            return null
         }
+
+        return sections.joinToString(separator = "\n\n")
     }
 
     /**

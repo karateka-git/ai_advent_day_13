@@ -1,6 +1,6 @@
-﻿# Manual Smoke Checklist
+﻿# Memory Strategy Smoke Checklist
 
-Ручной smoke-check проекта `ai_advent_day_12` без comparison runner.
+Ручной smoke-check проекта `ai_advent_day_13` для layered memory и short-term стратегий без comparison runner.
 
 Цель:
 - быстро проверить, что основное приложение запускается;
@@ -23,7 +23,7 @@
 ```powershell
 .\gradlew.bat build
 .\gradlew.bat installDist
-.\build\install\ai_advent_day_12\bin\ai_advent_day_12.bat
+.\build\install\ai_advent_day_13\bin\ai_advent_day_13.bat
 ```
 
 4. После каждого сценария при необходимости смотреть JSON в:
@@ -64,7 +64,7 @@ scripts/smoke-check/scenarios/
 .\gradlew.bat installDist
 ```
 
-- иначе helper может запустить старый `ai_advent_day_12.bat`, и проверка будет относиться не к текущему коду, а к предыдущей сборке.
+- иначе helper может запустить старый `ai_advent_day_13.bat`, и проверка будет относиться не к текущему коду, а к предыдущей сборке.
 
 ## Базовый запуск
 
@@ -366,5 +366,6 @@ Smoke-check считается успешным, если:
 - pending-memory flow работает без падений и показывает кандидатов там, где запись требует подтверждения;
 - persisted JSON соответствует ожидаемой layered-структуре с учётом допустимого отсутствия пустых секций;
 - ветки диалога действительно независимы.
+
 
 

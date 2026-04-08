@@ -1,3 +1,1 @@
-﻿rootProject.name = "ai_advent_day_12"
-
-
+rootProject.name = "ai_advent_day_13"

@@ -26,8 +26,9 @@
 
 ## Smoke-Check Проекта
 
-Для ручной проверки основной пользовательской функциональности проекта нужно использовать проектный сценарий:
-- [manual-smoke-checklist.md](/C:/Users/compadre/Downloads/Projects/AiAdvent/day_12/docs/manual-smoke-checklist.md)
+Для ручной проверки основной пользовательской функциональности проекта нужно использовать проектные сценарии:
+- [memory-strategy-smoke-checklist.md](/C:/Users/compadre/Downloads/Projects/AiAdvent/day_13/docs/memory-strategy-smoke-checklist.md)
+- [task-state-smoke-checklist.md](/C:/Users/compadre/Downloads/Projects/AiAdvent/day_13/docs/task-state-smoke-checklist.md)
 
 Правило для Codex:
 - если пользователь просит `проверить проект`, `прогнать основной сценарий`, `сделать smoke-check` или формулирует близкую просьбу без дополнительного уточнения, по умолчанию ориентироваться на этот чеклист;
@@ -46,7 +47,7 @@
 - после изменений в `Main.kt`, `scripts/run-scripted-session.ps1` или любой логике чтения/обработки консольного ввода scripted smoke-check нужно гонять только после повторного:
   - `.\gradlew.bat build`
   - `.\gradlew.bat installDist`
-- старый `build/install/ai_advent_day_12/bin/ai_advent_day_12.bat` после таких правок считать недостоверным для проверки сценариев;
+- старый `build/install/ai_advent_day_13/bin/ai_advent_day_13.bat` после таких правок считать недостоверным для проверки сценариев;
 - scripted smoke-check нельзя запускать параллельно: сценарии используют общий каталог `config/conversations`, и параллельный запуск приводит к блокировкам файлов и смешиванию результатов;
 - при проверке persisted state помнить ожидаемое поведение: `no_compression` и `sliding_window` не обязаны сохранять `strategyState`, а `summary`, `sticky_facts` и `branching` должны сохранять свой типизированный `strategyState`;
 - layered JSON в проекте считается разреженным:
@@ -54,4 +55,7 @@
   - `working`, `longTerm` и `pending` могут отсутствовать в persisted JSON, если слой пустой;
   - отсутствие пустого слоя не считать ошибкой smoke-check;
 - после внедрения pending-confirmation flow при проверке layered memory учитывать, что часть фактов может попасть не сразу в `working` или `longTerm`, а в `pending`.
+- для scripted smoke-check source of truth для transcript теперь должен идти из structured trace, который пишет `DebugTraceListener`;
+- helper `scripts/run-scripted-session.ps1` не должен зависеть от парсинга UI-строк вроде `Пользователь`, `Ассистент` или box-drawing символов;
+- `build/smoke-check/*-output.txt` можно собирать из trace-артефакта, а сырой stdout сохранять отдельно только как вспомогательный debug-лог.
 

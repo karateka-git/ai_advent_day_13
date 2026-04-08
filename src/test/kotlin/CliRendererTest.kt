@@ -183,6 +183,21 @@ class CliRendererTest {
         assertTrue(output.contains("Токены ответа:"))
     }
 
+    @Test
+    fun `model prompt is rendered as bordered debug block`() {
+        val output = captureStdout {
+            CliRenderer().emit(
+                AppEvent.ModelPromptAvailable(
+                    "System:\nBase prompt\n\nUser:\nОбычное сообщение"
+                )
+            )
+        }
+
+        assertTrue(output.contains("Model Prompt"))
+        assertTrue(output.contains("Base prompt"))
+        assertTrue(output.contains("Обычное сообщение"))
+    }
+
     private fun samplePending(): PendingMemoryState =
         PendingMemoryState(
             candidates = listOf(

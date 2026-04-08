@@ -1,7 +1,6 @@
 package agent.memory.core
 
 import agent.capability.AgentCapability
-import agent.core.AgentTokenStats
 import agent.memory.model.ManagedMemoryNoteEdit
 import agent.memory.model.ManagedMemoryNoteResult
 import agent.memory.model.PendingMemoryState
@@ -12,6 +11,7 @@ import agent.memory.model.MemoryLayer
 import agent.memory.model.MemoryNote
 import agent.memory.model.MemoryState
 import agent.memory.model.UserAccount
+import agent.memory.prompt.MemoryPromptContext
 import java.nio.file.Path
 import llm.core.model.ChatMessage
 
@@ -27,36 +27,33 @@ interface MemoryManager {
     fun currentConversation(): List<ChatMessage>
 
     /**
-     * Возвращает текущий effective conversation после memory prompt assembly без внесения новых изменений в state.
+     * Возвращает prompt context для текущего реального состояния памяти.
      *
-     * @return итоговый memory-aware контекст для модели.
+     * То есть это то, что модель увидит прямо сейчас, если не добавлять новое пользовательское
+     * сообщение и не менять state.
+     *
+     * @return short-term сообщения и memory contribution для system prompt.
      */
-    fun effectiveConversation(): List<ChatMessage>
+    fun effectivePromptContext(): MemoryPromptContext
 
     /**
-     * Оценивает локальный расход токенов для следующего пользовательского сообщения.
+     * Строит preview prompt context для гипотетического следующего пользовательского сообщения.
+     *
+     * Берёт текущее состояние памяти, мысленно добавляет `userPrompt`, пересчитывает short-term
+     * стратегию, но не сохраняет изменения в state.
      *
      * @param userPrompt текст нового пользовательского сообщения.
-     * @return локально рассчитанная статистика токенов.
+     * @return preview short-term сообщения и memory contribution для system prompt.
      */
-    fun previewTokenStats(userPrompt: String): AgentTokenStats
-
-    /**
-     * Строит preview conversation для указанного пользовательского сообщения без сохранения изменений в state.
-     *
-     * @param userPrompt текст нового пользовательского сообщения.
-     * @return итоговый preview-контекст для модели.
-     */
-    fun previewConversation(userPrompt: String): List<ChatMessage>
+    fun previewPromptContext(userPrompt: String): MemoryPromptContext
 
     /**
      * Добавляет пользовательское сообщение в short-term память, перераспределяет заметки по слоям
-     * и возвращает эффективный prompt для модели.
+     * и обновляет runtime state памяти.
      *
      * @param userPrompt текст нового пользовательского сообщения.
-     * @return итоговый контекст, который должен быть отправлен в модель.
      */
-    fun appendUserMessage(userPrompt: String): List<ChatMessage>
+    fun appendUserMessage(userPrompt: String)
 
     /**
      * Сохраняет ответ ассистента и обновляет derived state активной short-term стратегии.

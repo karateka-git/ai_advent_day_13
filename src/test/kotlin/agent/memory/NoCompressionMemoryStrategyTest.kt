@@ -12,9 +12,8 @@ class NoCompressionMemoryStrategyTest {
     private val strategy = NoCompressionMemoryStrategy()
 
     @Test
-    fun `returns all messages unchanged`() {
+    fun `returns all runtime messages unchanged`() {
         val messages = listOf(
-            ChatMessage(role = ChatRole.SYSTEM, content = "system"),
             ChatMessage(role = ChatRole.USER, content = "user"),
             ChatMessage(role = ChatRole.ASSISTANT, content = "assistant")
         )

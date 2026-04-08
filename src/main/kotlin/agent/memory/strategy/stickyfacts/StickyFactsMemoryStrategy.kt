@@ -1,11 +1,11 @@
-﻿package agent.memory.strategy.stickyfacts
+package agent.memory.strategy.stickyfacts
 
 import agent.memory.core.MemoryStateRefreshMode
 import agent.memory.core.MemoryStrategy
-import agent.memory.strategy.MemoryStrategyType
 import agent.memory.model.MemoryState
 import agent.memory.model.ShortTermMemory
 import agent.memory.model.StickyFactsStrategyState
+import agent.memory.strategy.MemoryStrategyType
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
 
@@ -13,7 +13,8 @@ import llm.core.model.ChatRole
  * Стратегия памяти, которая хранит устойчивые facts и добавляет их в prompt
  * вместе с последними сообщениями диалога.
  *
- * Переопределяет `refreshState`, потому что должна пакетно обновлять facts и отслеживать, какая часть диалога уже обработана.
+ * Переопределяет `refreshState`, потому что должна пакетно обновлять facts и отслеживать,
+ * какая часть диалога уже обработана.
  */
 class StickyFactsMemoryStrategy(
     private val recentMessagesCount: Int,
@@ -31,9 +32,8 @@ class StickyFactsMemoryStrategy(
 
     override val type: MemoryStrategyType = MemoryStrategyType.STICKY_FACTS
 
-    override fun effectiveContext(state: MemoryState): List<ChatMessage> {
-        return state.shortTerm.derivedMessages.toList()
-    }
+    override fun effectiveContext(state: MemoryState): List<ChatMessage> =
+        state.shortTerm.derivedMessages.toList()
 
     override fun refreshState(
         state: MemoryState,
@@ -50,7 +50,7 @@ class StickyFactsMemoryStrategy(
 
         val factsState = stickyFactsState(state)
         val existingFacts = factsState?.facts.orEmpty()
-        val dialogMessages = state.shortTerm.rawMessages.filter { it.role != ChatRole.SYSTEM }
+        val dialogMessages = state.shortTerm.rawMessages
         val coveredMessagesCount = factsState?.coveredMessagesCount ?: 0
         val newMessagesBatch = dialogMessages.drop(coveredMessagesCount)
         val newUserMessagesCount = newMessagesBatch.count { it.role == ChatRole.USER }
@@ -58,13 +58,13 @@ class StickyFactsMemoryStrategy(
         if (newUserMessagesCount < factsBatchSize) {
             return rebuildDerivedMessages(
                 state.copy(
-                shortTerm = state.shortTerm.copy(
-                    strategyState = StickyFactsStrategyState(
-                        facts = existingFacts,
-                        coveredMessagesCount = coveredMessagesCount
+                    shortTerm = state.shortTerm.copy(
+                        strategyState = StickyFactsStrategyState(
+                            facts = existingFacts,
+                            coveredMessagesCount = coveredMessagesCount
+                        )
                     )
                 )
-            )
             )
         }
 
@@ -75,13 +75,13 @@ class StickyFactsMemoryStrategy(
 
         return rebuildDerivedMessages(
             state.copy(
-            shortTerm = state.shortTerm.copy(
-                strategyState = StickyFactsStrategyState(
-                    facts = updatedFacts,
-                    coveredMessagesCount = dialogMessages.size
+                shortTerm = state.shortTerm.copy(
+                    strategyState = StickyFactsStrategyState(
+                        facts = updatedFacts,
+                        coveredMessagesCount = dialogMessages.size
+                    )
                 )
             )
-        )
         )
     }
 
@@ -102,17 +102,14 @@ class StickyFactsMemoryStrategy(
 
     private fun rebuildDerivedMessages(state: MemoryState): MemoryState {
         val rawMessages = state.shortTerm.rawMessages
-        val systemMessages = rawMessages.filter { it.role == ChatRole.SYSTEM }
-        val dialogMessages = rawMessages.filter { it.role != ChatRole.SYSTEM }
         val factsState = stickyFactsState(state)
 
         val derivedMessages = buildList {
-            addAll(systemMessages)
             factsState?.facts
                 ?.takeIf { it.isNotEmpty() }
                 ?.let(::toFactsMessage)
                 ?.let(::add)
-            addAll(dialogMessages.takeLast(recentMessagesCount))
+            addAll(rawMessages.takeLast(recentMessagesCount))
         }
 
         return state.copy(
@@ -124,5 +121,3 @@ class StickyFactsMemoryStrategy(
         )
     }
 }
-
-

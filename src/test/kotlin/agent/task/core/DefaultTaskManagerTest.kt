@@ -95,4 +95,36 @@ class DefaultTaskManagerTest {
         assertEquals("Планирование", TaskStages.definitionFor(TaskStage.PLANNING).label)
         assertEquals("Завершение", TaskStages.definitionFor(TaskStage.COMPLETION).label)
     }
+
+    @Test
+    fun `returns task prompt contribution via manager`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Реализовать task subsystem")
+        manager.updateStage(TaskStage.VALIDATION)
+        manager.updateStep("Проверить CLI-команды")
+        manager.updateExpectedAction(ExpectedAction.USER_CONFIRMATION)
+        manager.pauseTask()
+
+        val promptContext = manager.promptContext()
+
+        assertEquals(
+            """
+            Task state
+            - Title: Реализовать task subsystem
+            - Stage: Проверка
+            - Status: paused
+            - Expected action: user_confirmation
+            - Stage details: Проверка результата и поиск недочётов
+            - Current step: Проверить CLI-команды
+            """.trimIndent(),
+            promptContext.systemPromptContribution
+        )
+    }
+
+    @Test
+    fun `returns empty task prompt contribution when task is absent`() {
+        val manager = DefaultTaskManager()
+
+        assertNull(manager.promptContext().systemPromptContribution)
+    }
 }

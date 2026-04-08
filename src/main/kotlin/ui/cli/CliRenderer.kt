@@ -7,13 +7,11 @@ import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.memory.strategy.MemoryStrategyOption
 import agent.task.model.ExpectedAction
-import agent.task.model.TaskStage
-import agent.task.model.TaskState
 import agent.task.model.TaskStatus
+import agent.task.model.TaskState
 import agent.task.model.TaskStages
 import app.output.AppEvent
 import app.output.AppEventSink
-import app.output.HelpCommandDescriptor
 import app.output.HelpCommandGroup
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
@@ -95,7 +93,7 @@ class CliRenderer(
                             append(option.id)
                             append(" - ")
                             append(option.displayName)
-                            if (!option.isConfigured) {
+                            if (option.isConfigured.not()) {
                                 append(" (недоступна: ${option.unavailableReason})")
                             }
                         }
@@ -202,6 +200,8 @@ class CliRenderer(
                 print("│ ")
             }
 
+            is AppEvent.UserInputReceived -> Unit
+
             is AppEvent.AssistantResponseAvailable -> {
                 val lines = buildList {
                     addAll(splitRenderableLines(event.content))
@@ -223,6 +223,13 @@ class CliRenderer(
                         lines = preview.lines().drop(1)
                     )
                 }
+            }
+
+            is AppEvent.ModelPromptAvailable -> {
+                renderBorderedBlock(
+                    title = "Model Prompt",
+                    lines = splitRenderableLines(event.prompt)
+                )
             }
 
             AppEvent.ContextCleared -> printCommandResult("Контекст очищен. Системное сообщение сохранено.")

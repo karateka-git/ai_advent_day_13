@@ -1,0 +1,9 @@
+/task start Реализовать task subsystem
+/task stage planning
+/task step Продумать доменную модель
+/task expect user_input
+/task show
+/task pause
+Обычное сообщение без /task во время paused-задачи
+/task show
+/exit

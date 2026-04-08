@@ -21,13 +21,10 @@ import llm.core.model.LanguageModelResponse
 
 class DefaultMemoryManagerTest {
     @Test
-    fun `initializes storage with system message when history is empty`() {
+    fun `initializes storage with empty runtime history when history is empty`() {
         val manager = createManager()
 
-        assertEquals(
-            listOf(ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение")),
-            manager.currentConversation()
-        )
+        assertEquals(emptyList(), manager.currentConversation())
     }
 
     @Test
@@ -76,15 +73,15 @@ class DefaultMemoryManagerTest {
     }
 
     @Test
-    fun `preview token stats does not invoke memory layer allocator`() {
+    fun `preview prompt context does not invoke memory layer allocator`() {
         val manager = createManager(
             allocator = object : MemoryLayerAllocator {
                 override fun extractCandidates(state: MemoryState, message: ChatMessage): List<MemoryCandidateDraft> =
-                    error("Allocator не должен вызываться в previewTokenStats.")
+                    error("Allocator не должен вызываться в previewPromptContext.")
             }
         )
 
-        manager.previewTokenStats("Цель задачи - сделать MVP")
+        manager.previewPromptContext("Цель задачи - сделать MVP")
     }
 
     @Test
@@ -108,7 +105,6 @@ class DefaultMemoryManagerTest {
 
         assertEquals(
             listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
                 ChatMessage(role = ChatRole.USER, content = "u1"),
                 ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
                 ChatMessage(role = ChatRole.USER, content = "u2")
@@ -117,7 +113,6 @@ class DefaultMemoryManagerTest {
         )
         assertEquals(
             listOf(
-                ChatMessage(role = ChatRole.SYSTEM, content = "Системное сообщение"),
                 ChatMessage(role = ChatRole.ASSISTANT, content = "a1"),
                 ChatMessage(role = ChatRole.USER, content = "u2")
             ),
@@ -139,7 +134,6 @@ class DefaultMemoryManagerTest {
 
         return DefaultMemoryManager(
             languageModel = FakeLanguageModel(),
-            systemPrompt = "Системное сообщение",
             memoryStateRepository = effectiveRepository,
             memoryStrategy = strategy,
             memoryLayerAllocator = allocator
