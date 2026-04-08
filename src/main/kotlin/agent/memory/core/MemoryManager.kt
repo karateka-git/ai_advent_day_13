@@ -27,12 +27,27 @@ interface MemoryManager {
     fun currentConversation(): List<ChatMessage>
 
     /**
+     * Возвращает текущий effective conversation после memory prompt assembly без внесения новых изменений в state.
+     *
+     * @return итоговый memory-aware контекст для модели.
+     */
+    fun effectiveConversation(): List<ChatMessage>
+
+    /**
      * Оценивает локальный расход токенов для следующего пользовательского сообщения.
      *
      * @param userPrompt текст нового пользовательского сообщения.
      * @return локально рассчитанная статистика токенов.
      */
     fun previewTokenStats(userPrompt: String): AgentTokenStats
+
+    /**
+     * Строит preview conversation для указанного пользовательского сообщения без сохранения изменений в state.
+     *
+     * @param userPrompt текст нового пользовательского сообщения.
+     * @return итоговый preview-контекст для модели.
+     */
+    fun previewConversation(userPrompt: String): List<ChatMessage>
 
     /**
      * Добавляет пользовательское сообщение в short-term память, перераспределяет заметки по слоям

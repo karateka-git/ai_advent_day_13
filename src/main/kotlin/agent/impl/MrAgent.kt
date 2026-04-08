@@ -30,8 +30,11 @@ import agent.task.core.TaskManager
 import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
+import agent.task.prompt.TaskPromptAssembler
 import java.nio.file.Path
 import llm.core.LanguageModel
+import llm.core.model.ChatMessage
+import llm.core.model.ChatRole
 
 /**
  * Базовая реализация CLI-агента.
@@ -50,6 +53,7 @@ class MrAgent(
     ),
     memoryLayerAllocator: MemoryLayerAllocator = NoOpMemoryLayerAllocator(),
     private val taskManager: TaskManager = DefaultTaskManager(),
+    private val taskPromptAssembler: TaskPromptAssembler = TaskPromptAssembler(),
     private val memoryManager: MemoryManager = DefaultMemoryManager(
         languageModel = languageModel,
         systemPrompt = buildSystemPrompt(
@@ -63,18 +67,33 @@ class MrAgent(
 ) : Agent<String> {
     override val responseFormat: ResponseFormat<String> = TextResponseFormat
 
+    private val formattedSystemPrompt: String = buildSystemPrompt(
+        systemPrompt = systemPrompt,
+        responseFormatInstruction = TextResponseFormat.formatInstruction
+    )
+
     override val info = AgentInfo(
         name = "MrAgent",
         description = "CLI-агент для диалога с LLM через HTTP API.",
         model = languageModel.info.model
     )
 
-    override fun previewTokenStats(userPrompt: String): AgentTokenStats =
-        memoryManager.previewTokenStats(userPrompt)
+    override fun previewTokenStats(userPrompt: String): AgentTokenStats {
+        val baseStats = memoryManager.previewTokenStats(userPrompt)
+        val tokenCounter = languageModel.tokenCounter ?: return baseStats
+
+        val taskAwareHistory = enrichConversationWithTaskContext(memoryManager.effectiveConversation())
+        val taskAwarePreview = enrichConversationWithTaskContext(memoryManager.previewConversation(userPrompt))
+
+        return baseStats.copy(
+            historyTokens = tokenCounter.countMessages(taskAwareHistory),
+            promptTokensLocal = tokenCounter.countMessages(taskAwarePreview)
+        )
+    }
 
     override fun ask(userPrompt: String): AgentResponse<String> {
         val preview = previewTokenStats(userPrompt)
-        val conversation = memoryManager.appendUserMessage(userPrompt)
+        val conversation = enrichConversationWithTaskContext(memoryManager.appendUserMessage(userPrompt))
         val modelResponse = try {
             lifecycleListener.onModelRequestStarted()
             languageModel.complete(conversation)
@@ -171,6 +190,32 @@ class MrAgent(
 
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? =
         memoryManager.capability(capabilityType)
+
+    /**
+     * Внедряет task block в первое system message итогового контекста, не вмешиваясь в memory subsystem.
+     *
+     * @param conversation conversation, уже собранный memory subsystem.
+     * @return conversation с обогащённым system prompt.
+     */
+    private fun enrichConversationWithTaskContext(conversation: List<ChatMessage>): List<ChatMessage> {
+        val taskAwareSystemPrompt = taskPromptAssembler.enrichSystemPrompt(
+            systemPrompt = formattedSystemPrompt,
+            taskState = taskManager.currentTask()
+        )
+        val firstSystemIndex = conversation.indexOfFirst { it.role == ChatRole.SYSTEM }
+
+        return if (firstSystemIndex >= 0) {
+            conversation.mapIndexed { index, message ->
+                if (index == firstSystemIndex) {
+                    message.copy(content = taskAwareSystemPrompt)
+                } else {
+                    message
+                }
+            }
+        } else {
+            listOf(ChatMessage(role = ChatRole.SYSTEM, content = taskAwareSystemPrompt)) + conversation
+        }
+    }
 
     companion object {
         /**

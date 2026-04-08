@@ -77,8 +77,11 @@ class DefaultMemoryManager(
 
     override fun currentConversation(): List<ChatMessage> = state.shortTerm.rawMessages.toList()
 
+    override fun effectiveConversation(): List<ChatMessage> =
+        contextService.effectiveConversation(systemPrompt, state)
+
     override fun previewTokenStats(userPrompt: String): AgentTokenStats {
-        val effectiveConversation = contextService.effectiveConversation(systemPrompt, state)
+        val effectiveConversation = effectiveConversation()
         val historyTokens = languageModel.tokenCounter?.countMessages(effectiveConversation)
         val userPromptTokens = languageModel.tokenCounter?.countText(userPrompt)
         val promptTokensLocal = contextService.countPromptTokens(
@@ -94,13 +97,19 @@ class DefaultMemoryManager(
         )
     }
 
+    override fun previewConversation(userPrompt: String): List<ChatMessage> =
+        contextService.previewConversation(
+            systemPrompt = systemPrompt,
+            state = previewStateForUserPrompt(userPrompt)
+        )
+
     override fun appendUserMessage(userPrompt: String): List<ChatMessage> {
         val userMessage = ChatMessage(role = ChatRole.USER, content = userPrompt)
         val stateWithMessage = appendShortTermMessage(state, userMessage)
         val stateWithCandidates = processCandidatesIfAllowed(stateWithMessage, userMessage)
         state = refreshState(stateWithCandidates, notifyCompression = true)
         saveState()
-        return contextService.effectiveConversation(systemPrompt, state)
+        return effectiveConversation()
     }
 
     override fun appendAssistantMessage(content: String) {
