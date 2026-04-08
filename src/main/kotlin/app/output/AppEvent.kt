@@ -12,6 +12,7 @@ import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.memory.model.UserAccount
 import agent.memory.strategy.MemoryStrategyOption
+import agent.task.model.TaskState
 import llm.core.model.ChatRole
 import llm.core.model.LanguageModelOption
 
@@ -95,6 +96,13 @@ sealed interface AppEvent {
     data class UserProfileAvailable(
         val user: UserAccount,
         val notes: List<MemoryNote>
+    ) : AppEvent
+
+    /**
+     * Текущее состояние conversation-scoped задачи для пользовательской инспекции.
+     */
+    data class TaskStateAvailable(
+        val task: TaskState?
     ) : AppEvent
 
     /**

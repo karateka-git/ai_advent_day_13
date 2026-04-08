@@ -1,4 +1,6 @@
 import agent.memory.model.MemoryLayer
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import ui.cli.CliCommand
@@ -44,6 +46,53 @@ class CliCommandParserTest {
         assertEquals(
             CliCommand.EditPendingMemory("p3", "text", "Срок - две недели"),
             parser.parse("/memory edit p3 text Срок - две недели")
+        )
+    }
+
+    @Test
+    fun `parses task commands`() {
+        assertEquals(CliCommand.ShowTask, parser.parse("/task"))
+        assertEquals(CliCommand.ShowTask, parser.parse("/task show"))
+        assertEquals(CliCommand.ShowTaskCommands, parser.parse("/task help"))
+        assertEquals(
+            CliCommand.StartTask("Реализовать task subsystem"),
+            parser.parse("/task start Реализовать task subsystem")
+        )
+        assertEquals(
+            CliCommand.UpdateTaskStage(TaskStage.VALIDATION),
+            parser.parse("/task stage validation")
+        )
+        assertEquals(
+            CliCommand.UpdateTaskStep("Подготовить CLI-команды"),
+            parser.parse("/task step Подготовить CLI-команды")
+        )
+        assertEquals(
+            CliCommand.UpdateTaskExpectedAction(ExpectedAction.USER_CONFIRMATION),
+            parser.parse("/task expect user_confirmation")
+        )
+        assertEquals(CliCommand.PauseTask, parser.parse("/task pause"))
+        assertEquals(CliCommand.ResumeTask, parser.parse("/task resume"))
+        assertEquals(CliCommand.CompleteTask, parser.parse("/task done"))
+        assertEquals(CliCommand.ClearTask, parser.parse("/task clear"))
+    }
+
+    @Test
+    fun `intercepts incomplete task commands`() {
+        assertEquals(
+            CliCommand.InvalidCommand(InvalidCliCommandReason.Usage("/task start <title>")),
+            parser.parse("/task start")
+        )
+        assertEquals(
+            CliCommand.InvalidCommand(
+                InvalidCliCommandReason.Usage("/task stage <planning|execution|validation|completion>")
+            ),
+            parser.parse("/task stage")
+        )
+        assertEquals(
+            CliCommand.InvalidCommand(
+                InvalidCliCommandReason.Usage("/task expect <user_input|agent_execution|user_confirmation|none>")
+            ),
+            parser.parse("/task expect")
         )
     }
 

@@ -16,6 +16,7 @@ object CliCommands {
     const val USERS = "/users"
     const val USER = "/user"
     const val PROFILE = "/profile"
+    const val TASK = "/task"
     const val CHECKPOINT = "/checkpoint"
     const val BRANCH = "/branch"
     const val BRANCHES = "/branches"

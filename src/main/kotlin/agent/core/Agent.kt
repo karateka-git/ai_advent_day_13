@@ -11,6 +11,9 @@ import agent.memory.model.PendingMemoryState
 import agent.memory.model.PendingMemoryActionResult
 import agent.memory.model.PendingMemoryEdit
 import agent.memory.model.UserAccount
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
+import agent.task.model.TaskState
 import java.nio.file.Path
 
 /**
@@ -66,6 +69,51 @@ interface Agent<T> {
     fun switchUser(userId: String): UserAccount
 
     fun inspectProfile(): List<MemoryNote>
+
+    /**
+     * Возвращает текущее состояние conversation-scoped задачи, если она уже создана.
+     */
+    fun inspectTask(): TaskState?
+
+    /**
+     * Создаёт новую текущую задачу.
+     */
+    fun startTask(title: String): TaskState
+
+    /**
+     * Обновляет stage текущей задачи.
+     */
+    fun updateTaskStage(stage: TaskStage): TaskState
+
+    /**
+     * Обновляет текущий шаг задачи.
+     */
+    fun updateTaskStep(step: String): TaskState
+
+    /**
+     * Обновляет ожидаемое действие задачи.
+     */
+    fun updateTaskExpectedAction(action: ExpectedAction): TaskState
+
+    /**
+     * Ставит текущую задачу на паузу.
+     */
+    fun pauseTask(): TaskState
+
+    /**
+     * Возобновляет текущую задачу.
+     */
+    fun resumeTask(): TaskState
+
+    /**
+     * Помечает текущую задачу как завершённую.
+     */
+    fun completeTask(): TaskState
+
+    /**
+     * Полностью очищает текущую задачу.
+     */
+    fun clearTask()
 
     /**
      * Возвращает текущие pending-кандидаты на сохранение в durable memory.

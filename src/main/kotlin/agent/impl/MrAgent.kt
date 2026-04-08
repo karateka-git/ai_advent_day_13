@@ -25,6 +25,11 @@ import agent.memory.model.PendingMemoryState
 import agent.memory.model.UserAccount
 import agent.memory.strategy.summary.LlmConversationSummarizer
 import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
+import agent.task.core.DefaultTaskManager
+import agent.task.core.TaskManager
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
+import agent.task.model.TaskState
 import java.nio.file.Path
 import llm.core.LanguageModel
 
@@ -44,6 +49,7 @@ class MrAgent(
         summarizer = LlmConversationSummarizer(languageModel)
     ),
     memoryLayerAllocator: MemoryLayerAllocator = NoOpMemoryLayerAllocator(),
+    private val taskManager: TaskManager = DefaultTaskManager(),
     private val memoryManager: MemoryManager = DefaultMemoryManager(
         languageModel = languageModel,
         systemPrompt = buildSystemPrompt(
@@ -109,6 +115,27 @@ class MrAgent(
         memoryManager.switchUser(userId)
 
     override fun inspectProfile(): List<MemoryNote> = memoryManager.profileNotes()
+
+    override fun inspectTask(): TaskState? = taskManager.currentTask()
+
+    override fun startTask(title: String): TaskState = taskManager.startTask(title)
+
+    override fun updateTaskStage(stage: TaskStage): TaskState = taskManager.updateStage(stage)
+
+    override fun updateTaskStep(step: String): TaskState = taskManager.updateStep(step)
+
+    override fun updateTaskExpectedAction(action: ExpectedAction): TaskState =
+        taskManager.updateExpectedAction(action)
+
+    override fun pauseTask(): TaskState = taskManager.pauseTask()
+
+    override fun resumeTask(): TaskState = taskManager.resumeTask()
+
+    override fun completeTask(): TaskState = taskManager.completeTask()
+
+    override fun clearTask() {
+        taskManager.clearTask()
+    }
 
     override fun inspectPendingMemory(): PendingMemoryState = memoryManager.pendingMemory()
 

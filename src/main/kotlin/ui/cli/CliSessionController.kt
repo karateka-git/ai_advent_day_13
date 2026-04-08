@@ -10,6 +10,9 @@ import agent.memory.model.PendingMemoryEdit
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
 import agent.memory.strategy.branching.BranchingCapability
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
+import agent.task.model.TaskStages
 import app.output.AppEvent
 import app.output.AppEventSink
 import app.output.HelpCommandDescriptor
@@ -263,6 +266,109 @@ class CliSessionController(
                         notes = state.agent.inspectProfile()
                     )
                 )
+                CliSessionControllerResult.Continue
+            }
+
+            CliCommand.ShowTask -> {
+                appEventSink.emit(AppEvent.TaskStateAvailable(state.agent.inspectTask()))
+                CliSessionControllerResult.Continue
+            }
+
+            CliCommand.ShowTaskCommands -> {
+                appEventSink.emit(
+                    AppEvent.CommandsAvailable(
+                        title = "Команды задач",
+                        groups = listOf(TaskCliCatalog.helpGroup)
+                    )
+                )
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.StartTask -> {
+                runCatching { state.agent.startTask(command.title) }
+                    .onSuccess { task ->
+                        appEventSink.emit(
+                            AppEvent.CommandCompleted(
+                                "Создана задача '${task.title}' на этапе ${taskStageLabel(task.stage)}."
+                            )
+                        )
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.UpdateTaskStage -> {
+                runCatching { state.agent.updateTaskStage(command.stage) }
+                    .onSuccess { task ->
+                        appEventSink.emit(
+                            AppEvent.CommandCompleted(
+                                "Этап задачи '${task.title}' обновлён: ${taskStageLabel(task.stage)}."
+                            )
+                        )
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.UpdateTaskStep -> {
+                runCatching { state.agent.updateTaskStep(command.step) }
+                    .onSuccess { task ->
+                        appEventSink.emit(
+                            AppEvent.CommandCompleted(
+                                "Текущий шаг задачи '${task.title}' обновлён."
+                            )
+                        )
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.UpdateTaskExpectedAction -> {
+                runCatching { state.agent.updateTaskExpectedAction(command.action) }
+                    .onSuccess { task ->
+                        appEventSink.emit(
+                            AppEvent.CommandCompleted(
+                                "Ожидаемое действие задачи '${task.title}' обновлено: ${expectedActionLabel(task.expectedAction)}."
+                            )
+                        )
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            CliCommand.PauseTask -> {
+                runCatching { state.agent.pauseTask() }
+                    .onSuccess { task ->
+                        appEventSink.emit(AppEvent.CommandCompleted("Задача '${task.title}' поставлена на паузу."))
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            CliCommand.ResumeTask -> {
+                runCatching { state.agent.resumeTask() }
+                    .onSuccess { task ->
+                        appEventSink.emit(AppEvent.CommandCompleted("Задача '${task.title}' возобновлена."))
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            CliCommand.CompleteTask -> {
+                runCatching { state.agent.completeTask() }
+                    .onSuccess { task ->
+                        appEventSink.emit(AppEvent.CommandCompleted("Задача '${task.title}' отмечена как завершённая."))
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            CliCommand.ClearTask -> {
+                runCatching { state.agent.clearTask() }
+                    .onSuccess {
+                        appEventSink.emit(AppEvent.CommandCompleted("Текущая задача очищена."))
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
                 CliSessionControllerResult.Continue
             }
 
@@ -607,6 +713,17 @@ class CliSessionController(
             MemoryLayer.WORKING -> "working"
             MemoryLayer.LONG_TERM -> "long"
             MemoryLayer.SHORT_TERM -> "short"
+        }
+
+    private fun taskStageLabel(stage: TaskStage): String =
+        TaskStages.definitionFor(stage).label
+
+    private fun expectedActionLabel(action: ExpectedAction): String =
+        when (action) {
+            ExpectedAction.USER_INPUT -> "ожидается ввод пользователя"
+            ExpectedAction.AGENT_EXECUTION -> "следующий ход за агентом"
+            ExpectedAction.USER_CONFIRMATION -> "ожидается подтверждение пользователя"
+            ExpectedAction.NONE -> "не задано"
         }
 
     private fun layerLabel(layer: MemoryLayer): String =

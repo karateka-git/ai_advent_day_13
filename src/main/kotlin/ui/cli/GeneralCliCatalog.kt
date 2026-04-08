@@ -45,6 +45,7 @@ object GeneralCliCatalog {
                 HelpCommandDescriptor("${CliCommands.PROFILE} note delete <id>", "Удалить заметку профиля активного пользователя.")
             )
         ),
+        TaskCliCatalog.helpGroup,
         HelpCommandGroup(
             title = "Ветки и checkpoint",
             commands = listOf(

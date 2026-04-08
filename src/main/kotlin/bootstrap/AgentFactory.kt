@@ -6,6 +6,8 @@ import agent.lifecycle.AgentLifecycleListener
 import agent.memory.layer.MemoryLayerAllocatorFactory
 import agent.memory.strategy.MemoryStrategyFactory
 import agent.memory.strategy.MemoryStrategyType
+import agent.task.core.DefaultTaskManager
+import agent.task.persistence.JsonTaskStateRepository
 import java.net.http.HttpClient
 import java.util.Properties
 import llm.core.LanguageModel
@@ -47,7 +49,10 @@ class AgentFactory(
                 strategyType = strategyType,
                 languageModel = languageModel
             ),
-            memoryLayerAllocator = allocator
+            memoryLayerAllocator = allocator,
+            taskManager = DefaultTaskManager(
+                repository = JsonTaskStateRepository.forLanguageModel(languageModel)
+            )
         )
     }
 }

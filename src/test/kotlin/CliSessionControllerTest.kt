@@ -20,6 +20,10 @@ import agent.memory.model.PendingMemoryState
 import agent.memory.model.UserAccount
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
+import agent.task.model.TaskState
+import agent.task.model.TaskStatus
 import app.output.AppEvent
 import app.output.AppEventSink
 import java.net.http.HttpClient
@@ -106,6 +110,51 @@ class CliSessionControllerTest {
                         )
                     )
                 )
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `shows current task`() {
+        val sink = RecordingAppEventSink()
+        val controller = createController(sink = sink)
+
+        val result = controller.handle("/task")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.TaskStateAvailable(
+                    TaskState(
+                        title = "Реализовать task subsystem",
+                        stage = TaskStage.EXECUTION,
+                        currentStep = "Подключить CLI",
+                        expectedAction = ExpectedAction.AGENT_EXECUTION,
+                        status = TaskStatus.ACTIVE
+                    )
+                )
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `updates task through current agent`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent()
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("/task pause")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(TaskStatus.PAUSED, agent.taskState?.status)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.CommandCompleted("Задача 'Реализовать task subsystem' поставлена на паузу.")
             ),
             sink.events
         )
@@ -306,6 +355,13 @@ private class FakeAgent(
     private var currentPendingState: PendingMemoryState = initialPendingState
     val addedMemoryNotes = mutableListOf<Triple<MemoryLayer, String, String>>()
     val addedProfileNotes = mutableListOf<Pair<String, String>>()
+    var taskState: TaskState? = TaskState(
+        title = "Реализовать task subsystem",
+        stage = TaskStage.EXECUTION,
+        currentStep = "Подключить CLI",
+        expectedAction = ExpectedAction.AGENT_EXECUTION,
+        status = TaskStatus.ACTIVE
+    )
 
     override val info: AgentInfo = AgentInfo(
         name = "TestAgent",
@@ -339,6 +395,33 @@ private class FakeAgent(
 
     override fun inspectProfile(): List<MemoryNote> =
         listOf(MemoryNote(id = "n-profile", category = "communication_style", content = "Отвечай кратко"))
+
+    override fun inspectTask(): TaskState? = taskState
+
+    override fun startTask(title: String): TaskState =
+        TaskState(title = title).also { taskState = it }
+
+    override fun updateTaskStage(stage: TaskStage): TaskState =
+        requireTaskState().copy(stage = stage).also { taskState = it }
+
+    override fun updateTaskStep(step: String): TaskState =
+        requireTaskState().copy(currentStep = step).also { taskState = it }
+
+    override fun updateTaskExpectedAction(action: ExpectedAction): TaskState =
+        requireTaskState().copy(expectedAction = action).also { taskState = it }
+
+    override fun pauseTask(): TaskState =
+        requireTaskState().copy(status = TaskStatus.PAUSED).also { taskState = it }
+
+    override fun resumeTask(): TaskState =
+        requireTaskState().copy(status = TaskStatus.ACTIVE).also { taskState = it }
+
+    override fun completeTask(): TaskState =
+        requireTaskState().copy(status = TaskStatus.DONE).also { taskState = it }
+
+    override fun clearTask() {
+        taskState = null
+    }
 
     override fun inspectPendingMemory(): PendingMemoryState = currentPendingState
 
@@ -405,6 +488,9 @@ private class FakeAgent(
         )
 
     override fun <TCapability : AgentCapability> capability(capabilityType: Class<TCapability>): TCapability? = null
+
+    private fun requireTaskState(): TaskState =
+        requireNotNull(taskState) { "Текущая задача в тестовом агенте не создана." }
 
     companion object {
         fun memorySnapshot(): MemorySnapshot =

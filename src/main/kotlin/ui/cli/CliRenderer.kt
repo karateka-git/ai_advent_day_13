@@ -6,6 +6,11 @@ import agent.memory.model.MemoryOwnerType
 import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.memory.strategy.MemoryStrategyOption
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
+import agent.task.model.TaskState
+import agent.task.model.TaskStatus
+import agent.task.model.TaskStages
 import app.output.AppEvent
 import app.output.AppEventSink
 import app.output.HelpCommandDescriptor
@@ -124,6 +129,8 @@ class CliRenderer(
                     lines = lines
                 )
             }
+
+            is AppEvent.TaskStateAvailable -> renderTaskState(event.task)
 
             is AppEvent.PendingMemoryAvailable -> {
                 if (event.reason != null) {
@@ -289,6 +296,26 @@ class CliRenderer(
         )
     }
 
+    private fun renderTaskState(task: TaskState?) {
+        val lines = if (task == null) {
+            listOf("(текущая задача не создана)")
+        } else {
+            buildList {
+                add("Название: ${task.title}")
+                add("Этап: ${TaskStages.definitionFor(task.stage).label}")
+                add("Статус: ${taskStatusLabel(task.status)}")
+                add("Ожидаемое действие: ${expectedActionLabel(task.expectedAction)}")
+                add("Описание этапа: ${TaskStages.definitionFor(task.stage).description}")
+                add("Текущий шаг: ${task.currentStep ?: "(не задан)"}")
+            }
+        }
+
+        renderBorderedBlock(
+            title = "Задача",
+            lines = lines
+        )
+    }
+
     private fun renderCommandsBlock(title: String, groups: List<HelpCommandGroup>) {
         val lines = buildList {
             groups.forEachIndexed { index, group ->
@@ -417,6 +444,21 @@ class CliRenderer(
             "architectural_agreement" -> "архитектурная договорённость"
             "reusable_knowledge" -> "повторно полезное знание"
             else -> category
+        }
+
+    private fun taskStatusLabel(status: TaskStatus): String =
+        when (status) {
+            TaskStatus.ACTIVE -> "активна"
+            TaskStatus.PAUSED -> "на паузе"
+            TaskStatus.DONE -> "завершена"
+        }
+
+    private fun expectedActionLabel(action: ExpectedAction): String =
+        when (action) {
+            ExpectedAction.USER_INPUT -> "ожидается ввод пользователя"
+            ExpectedAction.AGENT_EXECUTION -> "следующий ход за агентом"
+            ExpectedAction.USER_CONFIRMATION -> "ожидается подтверждение пользователя"
+            ExpectedAction.NONE -> "не задано"
         }
 
     private fun printAdditionalCommands(

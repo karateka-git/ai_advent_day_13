@@ -6,6 +6,10 @@ import agent.memory.model.PendingMemoryCandidate
 import agent.memory.model.PendingMemoryState
 import agent.memory.model.ShortTermMemory
 import agent.memory.strategy.MemoryStrategyType
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
+import agent.task.model.TaskState
+import agent.task.model.TaskStatus
 import app.output.AppEvent
 import app.output.HelpCommandDescriptor
 import app.output.HelpCommandGroup
@@ -88,6 +92,29 @@ class CliRendererTest {
         assertTrue(output.contains("p1"))
         assertTrue(output.contains("2 weeks"))
         assertTrue(output.contains("/memory pending info"))
+    }
+
+    @Test
+    fun `task view prints bordered block`() {
+        val output = captureStdout {
+            CliRenderer().emit(
+                AppEvent.TaskStateAvailable(
+                    TaskState(
+                        title = "Реализовать task subsystem",
+                        stage = TaskStage.VALIDATION,
+                        currentStep = "Проверить CLI-команды",
+                        expectedAction = ExpectedAction.USER_CONFIRMATION,
+                        status = TaskStatus.PAUSED
+                    )
+                )
+            )
+        }
+
+        assertTrue(output.contains("Задача"))
+        assertTrue(output.contains("Реализовать task subsystem"))
+        assertTrue(output.contains("Проверка"))
+        assertTrue(output.contains("на паузе"))
+        assertTrue(output.contains("ожидается подтверждение пользователя"))
     }
 
     @Test

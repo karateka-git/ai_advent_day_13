@@ -2,6 +2,8 @@ package ui.cli
 
 import agent.memory.model.ManagedMemoryNoteEdit
 import agent.memory.model.MemoryLayer
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
 
 /**
  * Преобразует строку пользовательского ввода в типизированную CLI-команду.
@@ -91,6 +93,34 @@ class CliCommandParser {
                 CliCommand.InvalidCommand(InvalidCliCommandReason.Usage("/profile note delete <id>"))
             compactInput.startsWith("${CliCommands.PROFILE} note delete ", ignoreCase = true) ->
                 CliCommand.DeleteProfileNote(compactInput.substringAfter("${CliCommands.PROFILE} note delete ").trim())
+
+            compactInput.equals(CliCommands.TASK, ignoreCase = true) -> CliCommand.ShowTask
+            compactInput.equals("${CliCommands.TASK} show", ignoreCase = true) -> CliCommand.ShowTask
+            compactInput.equals("${CliCommands.TASK} help", ignoreCase = true) -> CliCommand.ShowTaskCommands
+            compactInput.equals("${CliCommands.TASK} start", ignoreCase = true) ->
+                CliCommand.InvalidCommand(InvalidCliCommandReason.Usage("/task start <title>"))
+            compactInput.startsWith("${CliCommands.TASK} start ", ignoreCase = true) ->
+                CliCommand.StartTask(compactInput.substringAfter("${CliCommands.TASK} start ").trim())
+            compactInput.equals("${CliCommands.TASK} stage", ignoreCase = true) ->
+                CliCommand.InvalidCommand(
+                    InvalidCliCommandReason.Usage("/task stage <planning|execution|validation|completion>")
+                )
+            compactInput.startsWith("${CliCommands.TASK} stage ", ignoreCase = true) ->
+                parseTaskStage(compactInput.substringAfter("${CliCommands.TASK} stage ").trim())
+            compactInput.equals("${CliCommands.TASK} step", ignoreCase = true) ->
+                CliCommand.InvalidCommand(InvalidCliCommandReason.Usage("/task step <text>"))
+            compactInput.startsWith("${CliCommands.TASK} step ", ignoreCase = true) ->
+                CliCommand.UpdateTaskStep(compactInput.substringAfter("${CliCommands.TASK} step ").trim())
+            compactInput.equals("${CliCommands.TASK} expect", ignoreCase = true) ->
+                CliCommand.InvalidCommand(
+                    InvalidCliCommandReason.Usage("/task expect <user_input|agent_execution|user_confirmation|none>")
+                )
+            compactInput.startsWith("${CliCommands.TASK} expect ", ignoreCase = true) ->
+                parseTaskExpectedAction(compactInput.substringAfter("${CliCommands.TASK} expect ").trim())
+            compactInput.equals("${CliCommands.TASK} pause", ignoreCase = true) -> CliCommand.PauseTask
+            compactInput.equals("${CliCommands.TASK} resume", ignoreCase = true) -> CliCommand.ResumeTask
+            compactInput.equals("${CliCommands.TASK} done", ignoreCase = true) -> CliCommand.CompleteTask
+            compactInput.equals("${CliCommands.TASK} clear", ignoreCase = true) -> CliCommand.ClearTask
 
             compactInput.equals(CliCommands.CHECKPOINT, ignoreCase = true) -> CliCommand.CreateCheckpoint(null)
             compactInput.startsWith("${CliCommands.CHECKPOINT} ", ignoreCase = true) ->
@@ -188,6 +218,40 @@ class CliCommandParser {
         )
     }
 
+    private fun parseTaskStage(rawValue: String): CliCommand =
+        runCatching {
+            CliCommand.UpdateTaskStage(
+                when (rawValue.lowercase()) {
+                    "planning" -> TaskStage.PLANNING
+                    "execution" -> TaskStage.EXECUTION
+                    "validation" -> TaskStage.VALIDATION
+                    "completion" -> TaskStage.COMPLETION
+                    else -> error("unsupported")
+                }
+            )
+        }.getOrElse {
+            CliCommand.InvalidCommand(
+                InvalidCliCommandReason.Usage("/task stage <planning|execution|validation|completion>")
+            )
+        }
+
+    private fun parseTaskExpectedAction(rawValue: String): CliCommand =
+        runCatching {
+            CliCommand.UpdateTaskExpectedAction(
+                when (rawValue.lowercase()) {
+                    "user_input" -> ExpectedAction.USER_INPUT
+                    "agent_execution" -> ExpectedAction.AGENT_EXECUTION
+                    "user_confirmation" -> ExpectedAction.USER_CONFIRMATION
+                    "none" -> ExpectedAction.NONE
+                    else -> error("unsupported")
+                }
+            )
+        }.getOrElse {
+            CliCommand.InvalidCommand(
+                InvalidCliCommandReason.Usage("/task expect <user_input|agent_execution|user_confirmation|none>")
+            )
+        }
+
     private fun parseProfileAdd(rawValue: String): CliCommand {
         val parts = rawValue.split(Regex("\\s+"), limit = 2)
         if (parts.size < 2) {
@@ -249,6 +313,16 @@ sealed interface CliCommand {
     data class AddProfileNote(val category: String, val content: String) : CliCommand
     data class EditProfileNote(val id: String, val edit: ManagedMemoryNoteEdit) : CliCommand
     data class DeleteProfileNote(val id: String) : CliCommand
+    data object ShowTask : CliCommand
+    data object ShowTaskCommands : CliCommand
+    data class StartTask(val title: String) : CliCommand
+    data class UpdateTaskStage(val stage: TaskStage) : CliCommand
+    data class UpdateTaskStep(val step: String) : CliCommand
+    data class UpdateTaskExpectedAction(val action: ExpectedAction) : CliCommand
+    data object PauseTask : CliCommand
+    data object ResumeTask : CliCommand
+    data object CompleteTask : CliCommand
+    data object ClearTask : CliCommand
     data class InvalidCommand(val reason: InvalidCliCommandReason) : CliCommand
     data class CreateCheckpoint(val name: String?) : CliCommand
     data object ShowBranches : CliCommand
