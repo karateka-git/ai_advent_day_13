@@ -1,0 +1,51 @@
+package agent.task.persistence
+
+import agent.task.model.ExpectedAction
+import agent.task.model.TaskStage
+import agent.task.model.TaskState
+import agent.task.model.TaskStatus
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+class JsonTaskStateRepositoryTest {
+    @Test
+    fun `loads null when file does not exist`() {
+        val tempDir = Files.createTempDirectory("task-state-repo-test")
+        val repository = JsonTaskStateRepository(tempDir.resolve("task-state.json"))
+
+        assertNull(repository.load())
+    }
+
+    @Test
+    fun `saves and loads task state`() {
+        val tempDir = Files.createTempDirectory("task-state-repo-test")
+        val repository = JsonTaskStateRepository(tempDir.resolve("task-state.json"))
+        val expected = TaskState(
+            title = "Реализовать task subsystem",
+            stage = TaskStage.VALIDATION,
+            currentStep = "Проверить JSON persistence",
+            expectedAction = ExpectedAction.USER_CONFIRMATION,
+            status = TaskStatus.PAUSED
+        )
+
+        repository.save(expected)
+        val actual = repository.load()
+
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun `clears persisted task state`() {
+        val tempDir = Files.createTempDirectory("task-state-repo-test")
+        val storagePath = tempDir.resolve("task-state.json")
+        val repository = JsonTaskStateRepository(storagePath)
+        repository.save(TaskState(title = "Реализовать task subsystem"))
+
+        repository.clear()
+
+        assertNull(repository.load())
+        assertEquals(false, Files.exists(storagePath))
+    }
+}

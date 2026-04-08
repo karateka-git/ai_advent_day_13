@@ -1,10 +1,13 @@
 package agent.task.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Типизированный этап задачи в рамках B-lite модели task subsystem.
  *
  * Стартовый набор stage не считается окончательным и может быть расширен в будущем.
  */
+@Serializable
 enum class TaskStage {
     PLANNING,
     EXECUTION,

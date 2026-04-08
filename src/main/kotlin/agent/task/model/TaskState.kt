@@ -1,5 +1,7 @@
 package agent.task.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Формализованное состояние одной текущей задачи.
  *
@@ -9,6 +11,7 @@ package agent.task.model
  * @property expectedAction ближайшее ожидаемое действие для продвижения задачи.
  * @property status жизненный статус задачи.
  */
+@Serializable
 data class TaskState(
     val title: String,
     val stage: TaskStage = TaskStage.PLANNING,

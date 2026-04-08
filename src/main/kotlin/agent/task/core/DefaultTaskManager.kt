@@ -4,6 +4,7 @@ import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStatus
+import agent.task.persistence.TaskStateRepository
 
 /**
  * In-memory реализация [TaskManager] для первого этапа task subsystem.
@@ -12,9 +13,10 @@ import agent.task.model.TaskStatus
  * жёсткой валидации переходов между stage.
  */
 class DefaultTaskManager(
-    initialTask: TaskState? = null
+    initialTask: TaskState? = null,
+    private val repository: TaskStateRepository? = null
 ) : TaskManager {
-    private var current: TaskState? = initialTask
+    private var current: TaskState? = initialTask ?: repository?.load()
 
     override fun currentTask(): TaskState? = current
 
@@ -24,7 +26,7 @@ class DefaultTaskManager(
         return TaskState(
             title = title.trim()
         ).also { createdTask ->
-            current = createdTask
+            setCurrent(createdTask)
         }
     }
 
@@ -69,6 +71,7 @@ class DefaultTaskManager(
 
     override fun clearTask() {
         current = null
+        repository?.clear()
     }
 
     /**
@@ -79,8 +82,16 @@ class DefaultTaskManager(
      */
     private fun updateCurrentTask(transform: (TaskState) -> TaskState): TaskState {
         val existingTask = current ?: error("Текущая задача ещё не создана.")
-        return transform(existingTask).also { updatedTask ->
-            current = updatedTask
-        }
+        return transform(existingTask).also(::setCurrent)
+    }
+
+    /**
+     * Обновляет текущую задачу в памяти и при наличии repository сохраняет её.
+     *
+     * @param task новое состояние задачи.
+     */
+    private fun setCurrent(task: TaskState) {
+        current = task
+        repository?.save(task)
     }
 }
