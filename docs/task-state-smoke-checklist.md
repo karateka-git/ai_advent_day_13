@@ -72,6 +72,26 @@ scripts/smoke-check/scenarios/task-state-stage1-verify.txt
 16. переключить `active user`
 17. проверить, что task state не поменялся автоматически
 
+## Полный ручной сценарий этапа 2
+
+1. `/task start Реализовать task behavior`
+2. `/task stage planning`
+3. обычное сообщение: `Давай уже писать код`
+4. убедиться, что появляется `Контекст задачи` и ответ не игнорирует planning
+5. `/task expect user_input`
+6. обычное сообщение: `Что дальше?`
+7. убедиться, что появляется `Контекст задачи` и агент явно показывает ожидание пользовательского решения
+8. `/task pause`
+9. обычное сообщение: `Продолжай`
+10. убедиться, что paused-задача не продолжается автоматически
+11. `/task resume`
+12. `/task stage validation`
+13. обычное сообщение про проверку результата
+14. убедиться, что появляется `Контекст задачи` и ответ выглядит как validation
+15. `/task stage completion`
+16. обычное сообщение: `Подведи итог`
+17. убедиться, что появляется `Контекст задачи` и ответ помогает завершить задачу
+
 ## Scripted Run 1: Setup
 
 Команда:
@@ -116,6 +136,25 @@ scripts/smoke-check/scenarios/task-state-stage1-verify.txt
 - после `/task done` в выводе виден `status: done`;
 - после `/user use reviewer` задача остаётся той же и с тем же state.
 
+## Scripted Run: Stage 2 Behavior
+
+Команда:
+
+```powershell
+.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-stage2.txt -OutputFile .\build\smoke-check\task-state-stage2-output.txt -ClearConversations
+```
+
+Что проверяем:
+- при `planning` в trace появляется `Контекст задачи`, а ответ не перескакивает сразу в обычное execution-поведение;
+- при `expectedAction = user_input` в trace появляется `Контекст задачи`, и агент явно ждёт пользовательское решение;
+- при `paused` модель не вызывается, а задача не продолжается автоматически;
+- при `validation` и `completion` в trace появляется `Контекст задачи`, а ответы смещаются в нужный режим.
+
+Ожидаемый результат:
+- в output видны блоки `Контекст задачи` для guide-сценариев;
+- в paused-сценарии нет `Запрос к модели`, если блокировка сработала;
+- scripted output помогает глазами проверить, что stage 2 реально заметен пользователю.
+
 ## Что посмотреть после прогона
 
 1. Вывод:
@@ -123,12 +162,13 @@ scripts/smoke-check/scenarios/task-state-stage1-verify.txt
 ```text
 build/smoke-check/task-state-stage1-setup-output.txt
 build/smoke-check/task-state-stage1-verify-output.txt
+build/smoke-check/task-state-stage2-output.txt
 ```
 
 Дополнительно:
 - `*-output.txt` теперь собирается из structured trace через `DebugTraceListener`, а не парсингом CLI-вывода;
 - `*-trace.jsonl` содержит machine-readable trace событий приложения;
-- `*-stdout.txt` сохраняет сырой stdout отдельно и нужен только для отладки проблем запуска или рендера.
+- `*-output.txt` собирается из trace в удобочитаемом виде и является основным артефактом для проверки.
 
 2. Persisted task state:
 

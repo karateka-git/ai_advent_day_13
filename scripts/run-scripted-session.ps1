@@ -34,14 +34,12 @@ if (-not (Test-Path -LiteralPath $outputDir)) {
 
 $scenarioBaseName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedOutputFile)
 $traceFile = Join-Path $outputDir "$scenarioBaseName-trace.jsonl"
-$stdoutFile = Join-Path $outputDir "$scenarioBaseName-stdout.txt"
 
 if ($ClearConversations -and (Test-Path -LiteralPath $conversationsDir)) {
     Get-ChildItem -LiteralPath $conversationsDir -File | Remove-Item -Force
 }
 
 Remove-Item -LiteralPath $traceFile -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $stdoutFile -Force -ErrorAction SilentlyContinue
 
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -113,8 +111,6 @@ finally {
     $process.Dispose()
 }
 
-Set-Content -LiteralPath $stdoutFile -Value $stdout -Encoding UTF8
-
 $traceOutput = [System.Text.StringBuilder]::new()
 if (Test-Path -LiteralPath $traceFile) {
     $traceLines = Get-Content -Encoding UTF8 -LiteralPath $traceFile | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
@@ -137,7 +133,6 @@ Set-Content -LiteralPath $resolvedOutputFile -Value $combinedOutput -Encoding UT
 
 Write-Host "Scenario: $resolvedScenarioFile"
 Write-Host "Output saved to: $resolvedOutputFile"
-Write-Host "Raw stdout saved to: $stdoutFile"
 Write-Host "Trace saved to: $traceFile"
 Write-Host "Exit code: $exitCode"
 

@@ -241,6 +241,12 @@ class DebugTraceListener(
                 lines = event.content.lines()
             )
 
+            is AppEvent.TaskBehaviorNotice -> record(
+                kind = "task_behavior_notice",
+                title = "Контекст задачи",
+                lines = event.message.lines()
+            )
+
             is AppEvent.AssistantResponseAvailable -> record(
                 kind = "assistant_response",
                 title = event.role.displayName,

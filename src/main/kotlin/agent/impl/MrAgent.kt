@@ -34,6 +34,7 @@ import agent.task.core.TaskOrchestrationService
 import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
+import agent.task.model.TaskStages
 import agent.prompt.AgentPromptAssembler
 import java.nio.file.Path
 import llm.core.LanguageModel
@@ -106,6 +107,12 @@ class MrAgent(
 
     override fun shouldCallModel(userPrompt: String): Boolean =
         taskDecision() !is TaskGuardDecision.Block
+
+    override fun previewTaskBehavior(userPrompt: String): String? =
+        when (val decision = taskDecision()) {
+            is TaskGuardDecision.Guide -> taskBehaviorNotice(decision)
+            else -> null
+        }
 
     override fun previewModelPrompt(userPrompt: String): String =
         when (val decision = taskDecision()) {
@@ -247,6 +254,7 @@ class MrAgent(
         contributions = listOfNotNull(
             memoryPromptContext.systemPromptContribution,
             taskManager.promptContext().systemPromptContribution,
+            taskStatePriorityContribution(taskManager.currentTask()),
             guideContribution(decision)
         )
     )
@@ -272,6 +280,20 @@ class MrAgent(
             }
         }
 
+    private fun taskStatePriorityContribution(task: TaskState?): String? =
+        task?.let {
+            """
+            Правила интерпретации task state
+            - Текущее состояние задачи определяется только блоком "Состояние задачи".
+            - Приоритет: статус -> ожидаемое действие -> этап -> история.
+            - История используется только как фон и не переопределяет текущее состояние задачи.
+            - При конфликте между историей и task state доверяй task state.
+            - Если нужен ввод пользователя, укажи, какого ввода не хватает, но отвечай в рамках текущего этапа.
+            - В итогах и сводках разделяй: текущее состояние задачи, исторические причины текущего состояния и следующий шаг.
+            - Не смешивай текущий этап задачи с историческими причинами, почему она не продвинулась дальше.
+            """.trimIndent()
+        }
+
     private fun behaviorModeLabel(mode: TaskBehaviorMode): String =
         when (mode) {
             TaskBehaviorMode.PLANNING -> "планирование"
@@ -287,6 +309,40 @@ class MrAgent(
             ExpectedAction.USER_CONFIRMATION -> "подтверждение пользователя"
             ExpectedAction.NONE -> "не задано"
         }
+
+    private fun taskBehaviorNotice(decision: TaskGuardDecision.Guide): String {
+        val task = decision.task
+        val stageLabel = TaskStages.definitionFor(task.stage).label.lowercase()
+        val stageFocus = when (decision.mode) {
+            TaskBehaviorMode.PLANNING ->
+                "Отвечу в режиме планирования: помогу прояснить задачу и выбрать следующий шаг."
+            TaskBehaviorMode.EXECUTION ->
+                "Отвечу в режиме выполнения: буду опираться на текущий рабочий ход задачи."
+            TaskBehaviorMode.VALIDATION ->
+                "Отвечу в режиме проверки: сфокусируюсь на верификации результата и поиске пропусков."
+            TaskBehaviorMode.COMPLETION ->
+                "Отвечу в режиме завершения: помогу подвести итог и закрыть задачу."
+        }
+
+        val actionFocus = when (decision.expectedAction) {
+            ExpectedAction.USER_INPUT ->
+                "Сейчас задача ждёт твоего решения, поэтому не буду считать его уже принятым."
+            ExpectedAction.USER_CONFIRMATION ->
+                "Сейчас задача ждёт твоего подтверждения, поэтому не буду считать его уже полученным."
+            ExpectedAction.AGENT_EXECUTION ->
+                "Сейчас следующий ход за агентом, но в рамках текущего этапа задачи."
+            else -> null
+        }
+
+        return buildString {
+            append("Контекст задачи '${task.title}': этап — $stageLabel. ")
+            append(stageFocus)
+            actionFocus?.let {
+                append(" ")
+                append(it)
+            }
+        }
+    }
 
     /**
      * Форматирует final conversation в читаемый debug-вид для smoke-check и ручной диагностики.

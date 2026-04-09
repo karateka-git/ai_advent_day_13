@@ -1,0 +1,13 @@
+/task start Реализовать task behavior
+/task stage planning
+Давай уже писать код
+/task expect user_input
+Что дальше?
+/task pause
+Продолжай
+/task resume
+/task stage validation
+Проверь результат и найди пропуски
+/task stage completion
+Подведи итог
+/exit

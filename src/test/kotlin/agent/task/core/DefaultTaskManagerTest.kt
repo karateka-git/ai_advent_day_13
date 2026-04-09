@@ -109,13 +109,13 @@ class DefaultTaskManagerTest {
 
         assertEquals(
             """
-            Task state
-            - Title: Реализовать task subsystem
-            - Stage: Проверка
-            - Status: paused
-            - Expected action: user_confirmation
-            - Stage details: Проверка результата и поиск недочётов
-            - Current step: Проверить CLI-команды
+            Состояние задачи
+            - Название: Реализовать task subsystem
+            - Этап: Проверка
+            - Статус: на паузе
+            - Ожидаемое действие: подтверждение пользователя
+            - Описание этапа: Проверка результата и поиск недочётов
+            - Текущий шаг: Проверить CLI-команды
             """.trimIndent(),
             promptContext.systemPromptContribution
         )

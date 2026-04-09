@@ -188,13 +188,13 @@ class CliRendererTest {
         val output = captureStdout {
             CliRenderer().emit(
                 AppEvent.ModelPromptAvailable(
-                    "System:\nBase prompt\n\nUser:\nОбычное сообщение"
+                    "Система:\nБазовый промпт\n\nПользователь:\nОбычное сообщение"
                 )
             )
         }
 
-        assertTrue(output.contains("Model Prompt"))
-        assertTrue(output.contains("Base prompt"))
+        assertTrue(output.contains("Запрос к модели"))
+        assertTrue(output.contains("Базовый промпт"))
         assertTrue(output.contains("Обычное сообщение"))
     }
 

@@ -166,6 +166,13 @@ sealed interface AppEvent {
         val content: String
     ) : AppEvent
 
+    /**
+     * Краткое пояснение, как текущая задача влияет на следующий ответ агента.
+     */
+    data class TaskBehaviorNotice(
+        val message: String
+    ) : AppEvent
+
     data class AssistantResponseAvailable(
         val role: ChatRole,
         val content: String,

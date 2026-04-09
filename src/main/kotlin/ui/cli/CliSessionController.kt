@@ -463,9 +463,13 @@ class CliSessionController(
                 try {
                     val pendingBefore = state.agent.inspectPendingMemory().candidates.size
                     val shouldCallModel = state.agent.shouldCallModel(command.value)
+                    val taskBehaviorNotice = state.agent.previewTaskBehavior(command.value)
                     appEventSink.emit(AppEvent.TokenPreviewAvailable(state.agent.previewTokenStats(command.value)))
                     if (showModelPrompt && shouldCallModel) {
                         appEventSink.emit(AppEvent.ModelPromptAvailable(state.agent.previewModelPrompt(command.value)))
+                    }
+                    taskBehaviorNotice?.let { notice ->
+                        appEventSink.emit(AppEvent.TaskBehaviorNotice(notice))
                     }
                     val response = if (shouldCallModel) {
                         appEventSink.emit(AppEvent.ModelRequestStarted)

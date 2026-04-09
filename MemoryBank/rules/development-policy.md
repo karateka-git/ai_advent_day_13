@@ -57,5 +57,5 @@
 - после внедрения pending-confirmation flow при проверке layered memory учитывать, что часть фактов может попасть не сразу в `working` или `longTerm`, а в `pending`.
 - для scripted smoke-check source of truth для transcript теперь должен идти из structured trace, который пишет `DebugTraceListener`;
 - helper `scripts/run-scripted-session.ps1` не должен зависеть от парсинга UI-строк вроде `Пользователь`, `Ассистент` или box-drawing символов;
-- `build/smoke-check/*-output.txt` можно собирать из trace-артефакта, а сырой stdout сохранять отдельно только как вспомогательный debug-лог.
+- `build/smoke-check/*-output.txt` нужно собирать из trace-артефакта; отдельный сырой stdout по умолчанию больше не сохраняется.
 

@@ -111,28 +111,28 @@ class DefaultTaskManager(
     private fun buildPromptContribution(taskState: TaskState): String {
         val stageDefinition = TaskStages.definitionFor(taskState.stage)
         return buildString {
-            appendLine("Task state")
-            appendLine("- Title: ${taskState.title}")
-            appendLine("- Stage: ${stageDefinition.label}")
-            appendLine("- Status: ${statusLabel(taskState.status)}")
-            appendLine("- Expected action: ${expectedActionLabel(taskState.expectedAction)}")
-            appendLine("- Stage details: ${stageDefinition.description}")
-            append("- Current step: ${taskState.currentStep ?: "(not specified)"}")
+            appendLine("Состояние задачи")
+            appendLine("- Название: ${taskState.title}")
+            appendLine("- Этап: ${stageDefinition.label}")
+            appendLine("- Статус: ${statusLabel(taskState.status)}")
+            appendLine("- Ожидаемое действие: ${expectedActionLabel(taskState.expectedAction)}")
+            appendLine("- Описание этапа: ${stageDefinition.description}")
+            append("- Текущий шаг: ${taskState.currentStep ?: "(не задан)"}")
         }
     }
 
     private fun statusLabel(status: TaskStatus): String =
         when (status) {
-            TaskStatus.ACTIVE -> "active"
-            TaskStatus.PAUSED -> "paused"
-            TaskStatus.DONE -> "done"
+            TaskStatus.ACTIVE -> "активна"
+            TaskStatus.PAUSED -> "на паузе"
+            TaskStatus.DONE -> "завершена"
         }
 
     private fun expectedActionLabel(action: ExpectedAction): String =
         when (action) {
-            ExpectedAction.USER_INPUT -> "user_input"
-            ExpectedAction.AGENT_EXECUTION -> "agent_execution"
-            ExpectedAction.USER_CONFIRMATION -> "user_confirmation"
-            ExpectedAction.NONE -> "none"
+            ExpectedAction.USER_INPUT -> "ввод пользователя"
+            ExpectedAction.AGENT_EXECUTION -> "выполнение агентом"
+            ExpectedAction.USER_CONFIRMATION -> "подтверждение пользователя"
+            ExpectedAction.NONE -> "не задано"
         }
 }

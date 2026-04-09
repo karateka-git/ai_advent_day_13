@@ -202,6 +202,13 @@ class CliRenderer(
 
             is AppEvent.UserInputReceived -> Unit
 
+            is AppEvent.TaskBehaviorNotice -> {
+                renderBorderedBlock(
+                    title = "Контекст задачи",
+                    lines = splitRenderableLines(event.message)
+                )
+            }
+
             is AppEvent.AssistantResponseAvailable -> {
                 val lines = buildList {
                     addAll(splitRenderableLines(event.content))

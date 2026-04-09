@@ -47,11 +47,13 @@ class MrAgentTaskPromptIntegrationTest {
         }
         val systemMessage = languageModel.lastMessages.first()
         assertEquals(ChatRole.SYSTEM, systemMessage.role)
-        assertTrue(systemMessage.content.contains("Task state"), allMessages)
+        assertTrue(systemMessage.content.contains("Состояние задачи"), allMessages)
         assertTrue(systemMessage.content.contains("Implement task subsystem"), allMessages)
-        assertTrue(systemMessage.content.contains("- Stage: ${TaskStages.definitionFor(TaskStage.EXECUTION).label}"), allMessages)
-        assertTrue(systemMessage.content.contains("- Expected action: agent_execution"), allMessages)
-        assertTrue(systemMessage.content.contains("- Current step: Connect task prompt"), allMessages)
+        assertTrue(systemMessage.content.contains("- Этап: ${TaskStages.definitionFor(TaskStage.EXECUTION).label}"), allMessages)
+        assertTrue(systemMessage.content.contains("- Ожидаемое действие: выполнение агентом"), allMessages)
+        assertTrue(systemMessage.content.contains("- Текущий шаг: Connect task prompt"), allMessages)
+        assertTrue(systemMessage.content.contains("Правила интерпретации task state"), allMessages)
+        assertTrue(systemMessage.content.contains("Приоритет: статус -> ожидаемое действие -> этап -> история."), allMessages)
         assertTrue(systemMessage.content.contains("Поведение по задаче"), allMessages)
     }
 
@@ -103,6 +105,31 @@ class MrAgentTaskPromptIntegrationTest {
 
         assertTrue(response.content.contains("на паузе"))
         assertFalse(agent.shouldCallModel("Продолжай"))
+    }
+
+    @Test
+    fun `preview task behavior explains guided mode`() {
+        val languageModel = RecordingLanguageModel()
+        val agent = MrAgent(
+            languageModel = languageModel,
+            lifecycleListener = NoOpAgentLifecycleListener,
+            taskManager = DefaultTaskManager(
+                initialTask = TaskState(
+                    title = "Implement task subsystem",
+                    stage = TaskStage.PLANNING,
+                    currentStep = "Choose storage format",
+                    expectedAction = ExpectedAction.USER_INPUT
+                )
+            ),
+            taskOrchestrationService = DefaultTaskOrchestrationService()
+        )
+
+        val notice = agent.previewTaskBehavior("Что дальше?")
+
+        assertNotNull(notice)
+        assertTrue(notice.contains("Контекст задачи 'Implement task subsystem'"))
+        assertTrue(notice.contains("этап — планирование"))
+        assertTrue(notice.contains("ждёт твоего решения"))
     }
 }
 

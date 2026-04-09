@@ -351,6 +351,7 @@ class CliSessionControllerTest {
         val sink = RecordingAppEventSink()
         val agent = FakeAgent(
             previewTokenStats = AgentTokenStats(historyTokens = 10),
+            previewTaskBehavior = "Контекст задачи: отвечу в режиме планирования.",
             previewModelPrompt = "Система:\nБазовый промпт\n\nПользователь:\nОбычное сообщение"
         )
         val controller = createController(
@@ -389,6 +390,27 @@ class CliSessionControllerTest {
         assertEquals(CliSessionControllerResult.Continue, result)
         assertTrue(sink.events.none { it == AppEvent.ModelRequestStarted })
         assertTrue(sink.events.none { it is AppEvent.ModelPromptAvailable })
+    }
+
+    @Test
+    fun `emits task behavior notice for guided prompt`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent(
+            previewTokenStats = AgentTokenStats(historyTokens = 8),
+            previewTaskBehavior = "Контекст задачи 'Реализовать task subsystem': этап — планирование. Отвечу в режиме планирования."
+        )
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("Давай уже писать код")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            AppEvent.TaskBehaviorNotice("Контекст задачи 'Реализовать task subsystem': этап — планирование. Отвечу в режиме планирования."),
+            sink.events[1]
+        )
     }
 
     private fun createController(
@@ -441,6 +463,7 @@ private class RecordingAppEventSink : AppEventSink {
 
 private class FakeAgent(
     private val previewTokenStats: AgentTokenStats = AgentTokenStats(),
+    private val previewTaskBehavior: String? = null,
     private val previewModelPrompt: String = "Система:\nБазовый промпт",
     var response: AgentResponse<String> = AgentResponse(
         content = "ok",
@@ -471,6 +494,8 @@ private class FakeAgent(
     override fun previewTokenStats(userPrompt: String): AgentTokenStats = previewTokenStats
 
     override fun shouldCallModel(userPrompt: String): Boolean = shouldCallModel
+
+    override fun previewTaskBehavior(userPrompt: String): String? = previewTaskBehavior
 
     override fun previewModelPrompt(userPrompt: String): String = previewModelPrompt
 
