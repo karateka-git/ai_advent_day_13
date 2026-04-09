@@ -1,6 +1,8 @@
 package agent.task.core
 
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
+import agent.task.model.TaskSessionState
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStatus
@@ -9,51 +11,46 @@ import agent.task.persistence.TaskStateRepository
 import agent.task.prompt.TaskPromptContext
 
 /**
- * In-memory реализация [TaskManager] для первого этапа task subsystem.
+ * In-memory реализация [TaskManager], которая уже хранит session state, но снаружи пока работает
+ * через совместимый single-task API активной задачи.
  *
- * На этом этапе менеджер управляет только одной текущей задачей без multitask и без
- * жёсткой валидации переходов между stage.
+ * На этапе 3 менеджер ещё не раскрывает полноценный multitask UX, но уже держит явную task session
+ * с активной задачей и готов к последующему расширению.
  */
 class DefaultTaskManager(
     initialTask: TaskState? = null,
     private val repository: TaskStateRepository? = null
 ) : TaskManager {
-    private var current: TaskState? = initialTask ?: repository?.load()
+    private var session: TaskSessionState = initialTask
+        ?.let(::sessionForSingleTask)
+        ?: repository?.load()?.let(::sessionForSingleTask)
+        ?: TaskSessionState()
 
-    override fun currentTask(): TaskState? = current
+    override fun sessionState(): TaskSessionState = session
+
+    override fun currentTask(): TaskState? = session.activeTask()?.toTaskState()
 
     override fun promptContext(): TaskPromptContext =
         TaskPromptContext(
-            systemPromptContribution = current?.let(::buildPromptContribution)
+            systemPromptContribution = currentTask()?.let(::buildPromptContribution)
         )
 
     override fun startTask(title: String): TaskState {
         require(title.isNotBlank()) { "Название задачи не должно быть пустым." }
 
-        return TaskState(
-            title = title.trim()
-        ).also { createdTask ->
-            setCurrent(createdTask)
-        }
+        return TaskState(title = title.trim()).also(::replaceActiveTask)
     }
 
     override fun updateStage(stage: TaskStage): TaskState =
-        updateCurrentTask { task ->
-            task.copy(stage = stage)
-        }
+        updateCurrentTask { task -> task.copy(stage = stage) }
 
     override fun updateStep(step: String): TaskState {
         require(step.isNotBlank()) { "Текущий шаг не должен быть пустым." }
-
-        return updateCurrentTask { task ->
-            task.copy(currentStep = step.trim())
-        }
+        return updateCurrentTask { task -> task.copy(currentStep = step.trim()) }
     }
 
     override fun updateExpectedAction(action: ExpectedAction): TaskState =
-        updateCurrentTask { task ->
-            task.copy(expectedAction = action)
-        }
+        updateCurrentTask { task -> task.copy(expectedAction = action) }
 
     override fun pauseTask(): TaskState =
         updateCurrentTask { task ->
@@ -72,41 +69,36 @@ class DefaultTaskManager(
         }
 
     override fun completeTask(): TaskState =
-        updateCurrentTask { task ->
-            task.copy(status = TaskStatus.DONE)
-        }
+        updateCurrentTask { task -> task.copy(status = TaskStatus.DONE) }
 
     override fun clearTask() {
-        current = null
+        session = TaskSessionState()
         repository?.clear()
     }
 
     /**
-     * Применяет изменение к текущей задаче и сохраняет обновлённое состояние.
-     *
-     * @param transform функция обновления состояния задачи.
-     * @return обновлённая задача.
+     * Применяет изменение к активной задаче и сохраняет обновлённое состояние.
      */
     private fun updateCurrentTask(transform: (TaskState) -> TaskState): TaskState {
-        val existingTask = current ?: error("Текущая задача ещё не создана.")
-        return transform(existingTask).also(::setCurrent)
+        val existingTask = currentTask() ?: error("Текущая задача ещё не создана.")
+        return transform(existingTask).also(::replaceActiveTask)
     }
 
     /**
-     * Обновляет текущую задачу в памяти и при наличии repository сохраняет её.
-     *
-     * @param task новое состояние задачи.
+     * Обновляет активную задачу в session state и синхронизирует совместимый single-task persistence.
      */
-    private fun setCurrent(task: TaskState) {
-        current = task
-        repository?.save(task)
+    private fun replaceActiveTask(taskState: TaskState) {
+        val activeId = session.activeTaskId ?: DEFAULT_ACTIVE_TASK_ID
+        val activeTask = TaskItem.fromTaskState(activeId, taskState)
+        session = TaskSessionState(
+            tasks = listOf(activeTask),
+            activeTaskId = activeTask.id
+        )
+        repository?.save(taskState)
     }
 
     /**
      * Формирует task-derived contribution для итогового system prompt.
-     *
-     * На этапе 1 task subsystem сама определяет, какой компактный контекст о текущей задаче нужен
-     * модели, но не модифицирует `system message` напрямую.
      */
     private fun buildPromptContribution(taskState: TaskState): String {
         val stageDefinition = TaskStages.definitionFor(taskState.stage)
@@ -135,4 +127,14 @@ class DefaultTaskManager(
             ExpectedAction.USER_CONFIRMATION -> "подтверждение пользователя"
             ExpectedAction.NONE -> "не задано"
         }
+
+    private fun sessionForSingleTask(taskState: TaskState): TaskSessionState =
+        TaskSessionState(
+            tasks = listOf(TaskItem.fromTaskState(DEFAULT_ACTIVE_TASK_ID, taskState)),
+            activeTaskId = DEFAULT_ACTIVE_TASK_ID
+        )
+
+    companion object {
+        private const val DEFAULT_ACTIVE_TASK_ID = "task-1"
+    }
 }

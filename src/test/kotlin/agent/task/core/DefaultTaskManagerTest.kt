@@ -7,6 +7,7 @@ import agent.task.model.TaskStages
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class DefaultTaskManagerTest {
@@ -85,6 +86,8 @@ class DefaultTaskManagerTest {
         manager.clearTask()
 
         assertNull(manager.currentTask())
+        assertNull(manager.sessionState().activeTaskId)
+        assertEquals(emptyList(), manager.sessionState().tasks)
     }
 
     @Test
@@ -126,5 +129,21 @@ class DefaultTaskManagerTest {
         val manager = DefaultTaskManager()
 
         assertNull(manager.promptContext().systemPromptContribution)
+    }
+
+    @Test
+    fun `exposes session state for active task`() {
+        val manager = DefaultTaskManager()
+
+        manager.startTask("Реализовать task subsystem")
+
+        val sessionState = manager.sessionState()
+
+        assertEquals(1, sessionState.tasks.size)
+        assertEquals("task-1", sessionState.activeTaskId)
+        val activeTask = sessionState.activeTask()
+        assertNotNull(activeTask)
+        assertEquals("Реализовать task subsystem", activeTask.title)
+        assertEquals(TaskStatus.ACTIVE, activeTask.status)
     }
 }

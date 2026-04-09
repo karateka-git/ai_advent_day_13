@@ -1,81 +1,72 @@
 package agent.task.core
 
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskSessionState
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.prompt.TaskPromptContext
 
 /**
- * Управляет одной текущей задачей в рамках первого этапа task subsystem.
+ * Управляет task session state и совместимым single-task API активной задачи.
  */
 interface TaskManager {
     /**
-     * Возвращает текущую задачу или `null`, если она ещё не создана.
+     * Возвращает полное состояние task session.
+     */
+    fun sessionState(): TaskSessionState
+
+    /**
+     * Возвращает текущую активную задачу или `null`, если активная задача ещё не создана.
      */
     fun currentTask(): TaskState?
 
     /**
      * Возвращает task-derived данные для итогового system prompt.
      *
-     * @return prompt context текущей задачи без прямой модификации `system message`.
+     * @return prompt context текущей активной задачи без прямой модификации `system message`.
      */
     fun promptContext(): TaskPromptContext
 
     /**
-     * Создаёт новую текущую задачу.
+     * Создаёт новую текущую активную задачу.
      *
      * @param title название рабочего трека.
-     * @return созданное состояние задачи.
+     * @return созданное состояние активной задачи.
      */
     fun startTask(title: String): TaskState
 
     /**
-     * Обновляет stage текущей задачи.
-     *
-     * @param stage новый этап задачи.
-     * @return обновлённое состояние задачи.
+     * Обновляет stage текущей активной задачи.
      */
     fun updateStage(stage: TaskStage): TaskState
 
     /**
-     * Обновляет текущий шаг задачи.
-     *
-     * @param step новый текущий шаг.
-     * @return обновлённое состояние задачи.
+     * Обновляет текущий шаг активной задачи.
      */
     fun updateStep(step: String): TaskState
 
     /**
-     * Обновляет ожидаемое действие задачи.
-     *
-     * @param action новое ожидаемое действие.
-     * @return обновлённое состояние задачи.
+     * Обновляет ожидаемое действие активной задачи.
      */
     fun updateExpectedAction(action: ExpectedAction): TaskState
 
     /**
-     * Ставит текущую задачу на паузу.
-     *
-     * @return обновлённое состояние задачи.
+     * Ставит активную задачу на паузу.
      */
     fun pauseTask(): TaskState
 
     /**
-     * Возобновляет текущую задачу.
-     *
-     * @return обновлённое состояние задачи.
+     * Возобновляет активную задачу.
      */
     fun resumeTask(): TaskState
 
     /**
-     * Завершает текущую задачу.
-     *
-     * @return обновлённое состояние задачи.
+     * Завершает активную задачу.
      */
     fun completeTask(): TaskState
 
     /**
-     * Полностью очищает текущую задачу.
+     * Полностью очищает активную задачу и task session.
      */
     fun clearTask()
 }
