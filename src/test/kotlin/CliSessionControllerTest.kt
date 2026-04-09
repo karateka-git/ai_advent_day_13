@@ -31,6 +31,7 @@ import java.nio.file.Path
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import llm.core.LanguageModel
 import llm.core.model.ChatMessage
 import llm.core.model.ChatRole
@@ -165,6 +166,11 @@ class CliSessionControllerTest {
         val sink = RecordingAppEventSink()
         val agent = FakeAgent().apply {
             taskState = requireTaskState().copy(status = TaskStatus.PAUSED)
+            shouldCallModel = false
+            response = AgentResponse(
+                content = "Текущая задача 'Реализовать task subsystem' стоит на паузе. Возобнови её через /task resume, если хочешь продолжить этот рабочий трек.",
+                tokenStats = AgentTokenStats(userPromptTokens = 1)
+            )
         }
         val expectedTaskState = requireNotNull(taskStateOrNull(agent))
         val controller = createController(
@@ -176,6 +182,7 @@ class CliSessionControllerTest {
 
         assertEquals(CliSessionControllerResult.Continue, result)
         assertEquals(expectedTaskState, agent.taskState)
+        assertTrue(sink.events.none { it == AppEvent.ModelRequestStarted })
     }
 
     @Test
@@ -344,7 +351,7 @@ class CliSessionControllerTest {
         val sink = RecordingAppEventSink()
         val agent = FakeAgent(
             previewTokenStats = AgentTokenStats(historyTokens = 10),
-            previewModelPrompt = "System:\nBase prompt\n\nUser:\nОбычное сообщение"
+            previewModelPrompt = "Система:\nБазовый промпт\n\nПользователь:\nОбычное сообщение"
         )
         val controller = createController(
             sink = sink,
@@ -355,7 +362,33 @@ class CliSessionControllerTest {
         val result = controller.handle("Обычное сообщение")
 
         assertEquals(CliSessionControllerResult.Continue, result)
-        assertEquals(AppEvent.ModelPromptAvailable("System:\nBase prompt\n\nUser:\nОбычное сообщение"), sink.events[1])
+        assertEquals(AppEvent.ModelPromptAvailable("Система:\nБазовый промпт\n\nПользователь:\nОбычное сообщение"), sink.events[1])
+    }
+
+    @Test
+    fun `does not emit model prompt or model request for blocked prompt`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent(
+            previewTokenStats = AgentTokenStats(userPromptTokens = 5),
+            previewModelPrompt = "Запрос к модели пропущен"
+        ).apply {
+            shouldCallModel = false
+            response = AgentResponse(
+                content = "Текущая задача 'Реализовать task subsystem' стоит на паузе. Возобнови её через /task resume, если хочешь продолжить этот рабочий трек.",
+                tokenStats = AgentTokenStats(userPromptTokens = 5)
+            )
+        }
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent),
+            showModelPrompt = true
+        )
+
+        val result = controller.handle("Продолжай")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertTrue(sink.events.none { it == AppEvent.ModelRequestStarted })
+        assertTrue(sink.events.none { it is AppEvent.ModelPromptAvailable })
     }
 
     private fun createController(
@@ -408,8 +441,8 @@ private class RecordingAppEventSink : AppEventSink {
 
 private class FakeAgent(
     private val previewTokenStats: AgentTokenStats = AgentTokenStats(),
-    private val previewModelPrompt: String = "System:\nBase prompt",
-    private val response: AgentResponse<String> = AgentResponse(
+    private val previewModelPrompt: String = "Система:\nБазовый промпт",
+    var response: AgentResponse<String> = AgentResponse(
         content = "ok",
         tokenStats = AgentTokenStats()
     ),
@@ -426,6 +459,7 @@ private class FakeAgent(
         expectedAction = ExpectedAction.AGENT_EXECUTION,
         status = TaskStatus.ACTIVE
     )
+    var shouldCallModel: Boolean = true
 
     override val info: AgentInfo = AgentInfo(
         name = "TestAgent",
@@ -435,6 +469,8 @@ private class FakeAgent(
     override val responseFormat: ResponseFormat<String> = TextResponseFormat
 
     override fun previewTokenStats(userPrompt: String): AgentTokenStats = previewTokenStats
+
+    override fun shouldCallModel(userPrompt: String): Boolean = shouldCallModel
 
     override fun previewModelPrompt(userPrompt: String): String = previewModelPrompt
 

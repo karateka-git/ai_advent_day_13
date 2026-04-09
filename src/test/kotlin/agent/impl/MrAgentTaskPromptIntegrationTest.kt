@@ -1,13 +1,16 @@
 package agent.impl
 
 import agent.lifecycle.NoOpAgentLifecycleListener
+import agent.memory.strategy.nocompression.NoCompressionMemoryStrategy
 import agent.task.core.DefaultTaskManager
+import agent.task.core.DefaultTaskOrchestrationService
 import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStages
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import llm.core.LanguageModel
@@ -25,6 +28,7 @@ class MrAgentTaskPromptIntegrationTest {
         val agent = MrAgent(
             languageModel = languageModel,
             lifecycleListener = NoOpAgentLifecycleListener,
+            memoryStrategy = NoCompressionMemoryStrategy(),
             taskManager = DefaultTaskManager(
                 initialTask = TaskState(
                     title = "Implement task subsystem",
@@ -48,6 +52,7 @@ class MrAgentTaskPromptIntegrationTest {
         assertTrue(systemMessage.content.contains("- Stage: ${TaskStages.definitionFor(TaskStage.EXECUTION).label}"), allMessages)
         assertTrue(systemMessage.content.contains("- Expected action: agent_execution"), allMessages)
         assertTrue(systemMessage.content.contains("- Current step: Connect task prompt"), allMessages)
+        assertTrue(systemMessage.content.contains("Поведение по задаче"), allMessages)
     }
 
     @Test
@@ -75,6 +80,30 @@ class MrAgentTaskPromptIntegrationTest {
         assertTrue(stats.promptTokensLocal!! >= stats.historyTokens!!)
         assertTrue(stats.promptTokensLocal!! > 0)
     }
+
+    @Test
+    fun `paused task skips model request and returns deterministic response`() {
+        val languageModel = RecordingLanguageModel()
+        val agent = MrAgent(
+            languageModel = languageModel,
+            lifecycleListener = NoOpAgentLifecycleListener,
+            taskManager = DefaultTaskManager(
+                initialTask = TaskState(
+                    title = "Implement task subsystem",
+                    stage = TaskStage.EXECUTION,
+                    currentStep = "Wait",
+                    expectedAction = ExpectedAction.AGENT_EXECUTION,
+                    status = agent.task.model.TaskStatus.PAUSED
+                )
+            ),
+            taskOrchestrationService = DefaultTaskOrchestrationService()
+        )
+
+        val response = agent.ask("Продолжай")
+
+        assertTrue(response.content.contains("на паузе"))
+        assertFalse(agent.shouldCallModel("Продолжай"))
+    }
 }
 
 private class RecordingLanguageModel(
@@ -86,8 +115,10 @@ private class RecordingLanguageModel(
     )
 
     var lastMessages: List<ChatMessage> = emptyList()
+    var completeCalls: Int = 0
 
     override fun complete(messages: List<ChatMessage>): LanguageModelResponse {
+        completeCalls += 1
         lastMessages = messages
         return LanguageModelResponse(
             content = "ok",

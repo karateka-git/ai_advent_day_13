@@ -227,7 +227,7 @@ class CliRenderer(
 
             is AppEvent.ModelPromptAvailable -> {
                 renderBorderedBlock(
-                    title = "Model Prompt",
+                    title = "Запрос к модели",
                     lines = splitRenderableLines(event.prompt)
                 )
             }

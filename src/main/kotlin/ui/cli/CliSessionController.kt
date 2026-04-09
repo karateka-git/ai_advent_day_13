@@ -462,15 +462,20 @@ class CliSessionController(
             is CliCommand.UserPrompt -> {
                 try {
                     val pendingBefore = state.agent.inspectPendingMemory().candidates.size
+                    val shouldCallModel = state.agent.shouldCallModel(command.value)
                     appEventSink.emit(AppEvent.TokenPreviewAvailable(state.agent.previewTokenStats(command.value)))
-                    if (showModelPrompt) {
+                    if (showModelPrompt && shouldCallModel) {
                         appEventSink.emit(AppEvent.ModelPromptAvailable(state.agent.previewModelPrompt(command.value)))
                     }
-                    appEventSink.emit(AppEvent.ModelRequestStarted)
-                    val response = try {
+                    val response = if (shouldCallModel) {
+                        appEventSink.emit(AppEvent.ModelRequestStarted)
+                        try {
+                            state.agent.ask(command.value)
+                        } finally {
+                            appEventSink.emit(AppEvent.ModelRequestFinished)
+                        }
+                    } else {
                         state.agent.ask(command.value)
-                    } finally {
-                        appEventSink.emit(AppEvent.ModelRequestFinished)
                     }
                     appEventSink.emit(
                         AppEvent.AssistantResponseAvailable(

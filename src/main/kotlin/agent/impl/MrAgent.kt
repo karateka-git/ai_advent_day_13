@@ -25,8 +25,12 @@ import agent.memory.model.PendingMemoryState
 import agent.memory.model.UserAccount
 import agent.memory.strategy.summary.LlmConversationSummarizer
 import agent.memory.strategy.summary.SummaryCompressionMemoryStrategy
+import agent.task.core.DefaultTaskOrchestrationService
+import agent.task.core.TaskBehaviorMode
+import agent.task.core.TaskGuardDecision
 import agent.task.core.DefaultTaskManager
 import agent.task.core.TaskManager
+import agent.task.core.TaskOrchestrationService
 import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
@@ -51,6 +55,7 @@ class MrAgent(
     ),
     memoryLayerAllocator: MemoryLayerAllocator = NoOpMemoryLayerAllocator(),
     private val taskManager: TaskManager = DefaultTaskManager(),
+    private val taskOrchestrationService: TaskOrchestrationService = DefaultTaskOrchestrationService(),
     private val agentPromptAssembler: AgentPromptAssembler = AgentPromptAssembler(),
     private val memoryManager: MemoryManager = DefaultMemoryManager(
         languageModel = languageModel,
@@ -73,9 +78,24 @@ class MrAgent(
     )
 
     override fun previewTokenStats(userPrompt: String): AgentTokenStats {
+        val decision = taskDecision()
         val tokenCounter = languageModel.tokenCounter
-        val effectiveConversation = finalConversation(memoryManager.effectivePromptContext())
-        val previewConversation = finalConversation(memoryManager.previewPromptContext(userPrompt))
+        val effectiveConversation = finalConversation(
+            memoryPromptContext = memoryManager.effectivePromptContext(),
+            decision = decision
+        )
+
+        if (decision is TaskGuardDecision.Block) {
+            return AgentTokenStats(
+                historyTokens = tokenCounter?.countMessages(effectiveConversation),
+                userPromptTokens = tokenCounter?.countText(userPrompt)
+            )
+        }
+
+        val previewConversation = finalConversation(
+            memoryPromptContext = memoryManager.previewPromptContext(userPrompt),
+            decision = decision
+        )
 
         return AgentTokenStats(
             historyTokens = tokenCounter?.countMessages(effectiveConversation),
@@ -84,15 +104,37 @@ class MrAgent(
         )
     }
 
+    override fun shouldCallModel(userPrompt: String): Boolean =
+        taskDecision() !is TaskGuardDecision.Block
+
     override fun previewModelPrompt(userPrompt: String): String =
-        formatConversationForDebug(
-            finalConversation(memoryManager.previewPromptContext(userPrompt))
-        )
+        when (val decision = taskDecision()) {
+            is TaskGuardDecision.Block -> "Запрос к модели пропущен.\nПричина: ${decision.message}"
+            else -> formatConversationForDebug(
+                finalConversation(
+                    memoryPromptContext = memoryManager.previewPromptContext(userPrompt),
+                    decision = decision
+                )
+            )
+        }
 
     override fun ask(userPrompt: String): AgentResponse<String> {
+        val decision = taskDecision()
         val preview = previewTokenStats(userPrompt)
         memoryManager.appendUserMessage(userPrompt)
-        val conversation = finalConversation(memoryManager.effectivePromptContext())
+
+        if (decision is TaskGuardDecision.Block) {
+            memoryManager.appendAssistantMessage(decision.message)
+            return AgentResponse(
+                content = responseFormat.parse(decision.message),
+                tokenStats = preview
+            )
+        }
+
+        val conversation = finalConversation(
+            memoryPromptContext = memoryManager.effectivePromptContext(),
+            decision = decision
+        )
         val modelResponse = try {
             lifecycleListener.onModelRequestStarted()
             languageModel.complete(conversation)
@@ -197,15 +239,54 @@ class MrAgent(
      * @return итоговый conversation для модели.
      */
     private fun finalConversation(
-        memoryPromptContext: agent.memory.prompt.MemoryPromptContext
+        memoryPromptContext: agent.memory.prompt.MemoryPromptContext,
+        decision: TaskGuardDecision = taskDecision()
     ) = agentPromptAssembler.assembleConversation(
         baseSystemPrompt = formattedSystemPrompt,
         messages = memoryPromptContext.messages,
         contributions = listOfNotNull(
             memoryPromptContext.systemPromptContribution,
-            taskManager.promptContext().systemPromptContribution
+            taskManager.promptContext().systemPromptContribution,
+            guideContribution(decision)
         )
     )
+
+    /**
+     * Возвращает текущее task-aware orchestration-решение для ответа агента.
+     */
+    private fun taskDecision(): TaskGuardDecision =
+        taskOrchestrationService.evaluate(taskManager.currentTask())
+
+    /**
+     * Преобразует мягкое orchestration-решение в дополнительный prompt contribution для модели.
+     */
+    private fun guideContribution(decision: TaskGuardDecision): String? =
+        (decision as? TaskGuardDecision.Guide)?.let { guide ->
+            buildString {
+                appendLine("Поведение по задаче")
+                appendLine("- Режим: ${behaviorModeLabel(guide.mode)}")
+                guide.expectedAction?.let { action ->
+                    appendLine("- Фокус ожидаемого действия: ${expectedActionLabel(action)}")
+                }
+                append(guide.guidance)
+            }
+        }
+
+    private fun behaviorModeLabel(mode: TaskBehaviorMode): String =
+        when (mode) {
+            TaskBehaviorMode.PLANNING -> "планирование"
+            TaskBehaviorMode.EXECUTION -> "выполнение"
+            TaskBehaviorMode.VALIDATION -> "проверка"
+            TaskBehaviorMode.COMPLETION -> "завершение"
+        }
+
+    private fun expectedActionLabel(action: ExpectedAction): String =
+        when (action) {
+            ExpectedAction.USER_INPUT -> "ввод пользователя"
+            ExpectedAction.AGENT_EXECUTION -> "выполнение агентом"
+            ExpectedAction.USER_CONFIRMATION -> "подтверждение пользователя"
+            ExpectedAction.NONE -> "не задано"
+        }
 
     /**
      * Форматирует final conversation в читаемый debug-вид для smoke-check и ручной диагностики.
@@ -213,9 +294,9 @@ class MrAgent(
     private fun formatConversationForDebug(conversation: List<llm.core.model.ChatMessage>): String =
         conversation.joinToString(separator = "\n\n") { message ->
             val roleLabel = when (message.role) {
-                llm.core.model.ChatRole.SYSTEM -> "System"
-                llm.core.model.ChatRole.USER -> "User"
-                llm.core.model.ChatRole.ASSISTANT -> "Assistant"
+                llm.core.model.ChatRole.SYSTEM -> "Система"
+                llm.core.model.ChatRole.USER -> "Пользователь"
+                llm.core.model.ChatRole.ASSISTANT -> "Ассистент"
             }
             "$roleLabel:\n${message.content}"
         }
