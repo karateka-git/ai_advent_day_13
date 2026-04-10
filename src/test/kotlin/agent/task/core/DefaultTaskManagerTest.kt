@@ -146,4 +146,35 @@ class DefaultTaskManagerTest {
         assertEquals("Реализовать task subsystem", activeTask.title)
         assertEquals(TaskStatus.ACTIVE, activeTask.status)
     }
+
+    @Test
+    fun `starting second task keeps first task and pauses previous active`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+
+        val secondTask = manager.startTask("Вторая задача")
+        val sessionState = manager.sessionState()
+
+        assertEquals("Вторая задача", secondTask.title)
+        assertEquals(2, sessionState.tasks.size)
+        assertEquals("task-2", sessionState.activeTaskId)
+        assertEquals(TaskStatus.PAUSED, sessionState.tasks.first { it.id == "task-1" }.status)
+        assertEquals(TaskStatus.ACTIVE, sessionState.tasks.first { it.id == "task-2" }.status)
+        assertEquals("Вторая задача", manager.currentTask()?.title)
+    }
+
+    @Test
+    fun `starting new task does not rewrite completed previous task`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.completeTask()
+
+        manager.startTask("Вторая задача")
+
+        val sessionState = manager.sessionState()
+
+        assertEquals(TaskStatus.DONE, sessionState.tasks.first { it.id == "task-1" }.status)
+        assertEquals(TaskStatus.ACTIVE, sessionState.tasks.first { it.id == "task-2" }.status)
+        assertEquals("task-2", sessionState.activeTaskId)
+    }
 }

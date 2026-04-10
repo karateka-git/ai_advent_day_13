@@ -38,7 +38,23 @@ class DefaultTaskManager(
     override fun startTask(title: String): TaskState {
         require(title.isNotBlank()) { "Название задачи не должно быть пустым." }
 
-        return TaskState(title = title.trim()).also(::replaceActiveTask)
+        val currentActiveTask = session.activeTask()
+        val previousTasks = session.tasks.map { task ->
+            if (currentActiveTask != null && task.id == currentActiveTask.id && task.status != TaskStatus.DONE) {
+                task.copy(status = TaskStatus.PAUSED)
+            } else {
+                task
+            }
+        }
+        val newTask = TaskItem.fromTaskState(nextTaskId(previousTasks), TaskState(title = title.trim()))
+
+        session = TaskSessionState(
+            tasks = previousTasks + newTask,
+            activeTaskId = newTask.id
+        )
+        persistSession()
+
+        return newTask.toTaskState()
     }
 
     override fun updateStage(stage: TaskStage): TaskState =
@@ -80,20 +96,24 @@ class DefaultTaskManager(
      * Применяет изменение к активной задаче и сохраняет обновлённое состояние.
      */
     private fun updateCurrentTask(transform: (TaskState) -> TaskState): TaskState {
+        val activeTaskId = session.activeTaskId ?: error("Текущая задача ещё не создана.")
         val existingTask = currentTask() ?: error("Текущая задача ещё не создана.")
-        return transform(existingTask).also(::replaceActiveTask)
+        val updatedTask = TaskItem.fromTaskState(activeTaskId, transform(existingTask))
+
+        session = session.copy(
+            tasks = session.tasks.map { task ->
+                if (task.id == activeTaskId) updatedTask else task
+            }
+        )
+        persistSession()
+
+        return updatedTask.toTaskState()
     }
 
     /**
-     * Обновляет активную задачу в session state и синхронизирует совместимый single-task persistence.
+     * Сохраняет актуальный task session state.
      */
-    private fun replaceActiveTask(taskState: TaskState) {
-        val activeId = session.activeTaskId ?: DEFAULT_ACTIVE_TASK_ID
-        val activeTask = TaskItem.fromTaskState(activeId, taskState)
-        session = TaskSessionState(
-            tasks = listOf(activeTask),
-            activeTaskId = activeTask.id
-        )
+    private fun persistSession() {
         repository?.save(session)
     }
 
@@ -134,7 +154,18 @@ class DefaultTaskManager(
             activeTaskId = DEFAULT_ACTIVE_TASK_ID
         )
 
+    private fun nextTaskId(tasks: List<TaskItem>): String {
+        val nextIndex = tasks
+            .mapNotNull { task -> task.id.removePrefix(TASK_ID_PREFIX).toIntOrNull() }
+            .maxOrNull()
+            ?.plus(1)
+            ?: 1
+
+        return "$TASK_ID_PREFIX$nextIndex"
+    }
+
     companion object {
         private const val DEFAULT_ACTIVE_TASK_ID = "task-1"
+        private const val TASK_ID_PREFIX = "task-"
     }
 }
