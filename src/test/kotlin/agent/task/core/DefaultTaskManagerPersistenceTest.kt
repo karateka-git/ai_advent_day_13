@@ -68,6 +68,23 @@ class DefaultTaskManagerPersistenceTest {
     }
 
     @Test
+    fun `persists switched active task through repository`() {
+        val repository = InMemoryTaskSessionStateRepository()
+        val manager = DefaultTaskManager(repository = repository)
+
+        manager.startTask("Первая задача")
+        manager.startTask("Вторая задача")
+        manager.switchTask("task-1")
+
+        val restoredManager = DefaultTaskManager(repository = repository)
+
+        assertEquals("task-1", restoredManager.sessionState().activeTaskId)
+        assertEquals(TaskStatus.ACTIVE, restoredManager.sessionState().task("task-1")?.status)
+        assertEquals(TaskStatus.PAUSED, restoredManager.sessionState().task("task-2")?.status)
+        assertEquals("Первая задача", restoredManager.activeTask()?.title)
+    }
+
+    @Test
     fun `clears repository when task is cleared`() {
         val repository = InMemoryTaskSessionStateRepository(
             initialState = TaskSessionState(

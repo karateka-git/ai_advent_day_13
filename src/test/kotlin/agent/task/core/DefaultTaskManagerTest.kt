@@ -1,6 +1,8 @@
 package agent.task.core
 
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
+import agent.task.model.TaskSessionState
 import agent.task.model.TaskStage
 import agent.task.model.TaskStatus
 import agent.task.model.TaskStages
@@ -46,12 +48,19 @@ class DefaultTaskManagerTest {
 
         val pausedTask = manager.pauseTask()
         assertEquals(TaskStatus.PAUSED, pausedTask.status)
+        assertNull(manager.activeTask())
+        assertEquals(TaskStatus.PAUSED, manager.currentTask()?.status)
+        assertNull(manager.sessionState().activeTaskId)
 
         val resumedTask = manager.resumeTask()
         assertEquals(TaskStatus.ACTIVE, resumedTask.status)
+        assertEquals("task-1", manager.sessionState().activeTaskId)
 
         val completedTask = manager.completeTask()
         assertEquals(TaskStatus.DONE, completedTask.status)
+        assertNull(manager.activeTask())
+        assertNull(manager.sessionState().activeTaskId)
+        assertEquals(TaskStatus.DONE, manager.currentTask()?.status)
     }
 
     @Test
@@ -71,11 +80,11 @@ class DefaultTaskManagerTest {
         manager.startTask("Реализовать task subsystem")
         manager.completeTask()
 
-        val error = assertFailsWith<IllegalArgumentException> {
+        val error = assertFailsWith<IllegalStateException> {
             manager.pauseTask()
         }
 
-        assertEquals("Нельзя поставить на паузу уже завершённую задачу.", error.message)
+        assertEquals("Нет активной задачи для паузы.", error.message)
     }
 
     @Test
@@ -88,6 +97,87 @@ class DefaultTaskManagerTest {
         assertNull(manager.currentTask())
         assertNull(manager.sessionState().activeTaskId)
         assertEquals(emptyList(), manager.sessionState().tasks)
+    }
+
+    @Test
+    fun `switches tasks by id and preserves paused tasks`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.startTask("Вторая задача")
+
+        val switchedTask = manager.switchTask("task-1")
+        val sessionState = manager.sessionState()
+
+        assertEquals("Первая задача", switchedTask.title)
+        assertEquals("task-1", sessionState.activeTaskId)
+        assertEquals(TaskStatus.ACTIVE, sessionState.task("task-1")?.status)
+        assertEquals(TaskStatus.PAUSED, sessionState.task("task-2")?.status)
+        assertEquals("Первая задача", manager.activeTask()?.title)
+    }
+
+    @Test
+    fun `resumes paused task by id`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.pauseTask()
+
+        val resumedTask = manager.resumeTask("task-1")
+
+        assertEquals(TaskStatus.ACTIVE, resumedTask.status)
+        assertEquals("task-1", manager.sessionState().activeTaskId)
+        assertEquals(TaskStatus.ACTIVE, manager.sessionState().task("task-1")?.status)
+    }
+
+    @Test
+    fun `completes task by id and clears active task`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+
+        val completedTask = manager.completeTask("task-1")
+
+        assertEquals(TaskStatus.DONE, completedTask.status)
+        assertNull(manager.activeTask())
+        assertNull(manager.sessionState().activeTaskId)
+        assertEquals(TaskStatus.DONE, manager.sessionState().task("task-1")?.status)
+    }
+
+    @Test
+    fun `session state enforces unique task ids and active task consistency`() {
+        assertFailsWith<IllegalArgumentException> {
+            TaskSessionState(
+                tasks = listOf(
+                    TaskItem(id = "task-1", title = "Первая задача"),
+                    TaskItem(id = "task-1", title = "Дублирующая задача")
+                )
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            TaskSessionState(
+                tasks = listOf(
+                    TaskItem(id = "task-1", title = "Первая задача", status = TaskStatus.PAUSED)
+                ),
+                activeTaskId = "task-1"
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            TaskSessionState(
+                tasks = listOf(
+                    TaskItem(id = "task-1", title = "Первая задача", status = TaskStatus.ACTIVE)
+                )
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            TaskSessionState(
+                tasks = listOf(
+                    TaskItem(id = "task-1", title = "Первая задача", status = TaskStatus.ACTIVE),
+                    TaskItem(id = "task-2", title = "Вторая задача", status = TaskStatus.ACTIVE)
+                ),
+                activeTaskId = "task-1"
+            )
+        }
     }
 
     @Test
@@ -106,7 +196,6 @@ class DefaultTaskManagerTest {
         manager.updateStage(TaskStage.VALIDATION)
         manager.updateStep("Проверить CLI-команды")
         manager.updateExpectedAction(ExpectedAction.USER_CONFIRMATION)
-        manager.pauseTask()
 
         val promptContext = manager.promptContext()
 
@@ -115,13 +204,34 @@ class DefaultTaskManagerTest {
             Состояние задачи
             - Название: Реализовать task subsystem
             - Этап: Проверка
-            - Статус: на паузе
+            - Статус: активна
             - Ожидаемое действие: подтверждение пользователя
             - Описание этапа: Проверка результата и поиск недочётов
             - Текущий шаг: Проверить CLI-команды
             """.trimIndent(),
             promptContext.systemPromptContribution
         )
+    }
+
+    @Test
+    fun `returns empty task prompt contribution when task is paused`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Реализовать task subsystem")
+        manager.pauseTask()
+
+        assertNull(manager.promptContext().systemPromptContribution)
+    }
+
+    @Test
+    fun `keeps compatible current task when active task is absent`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.pauseTask()
+
+        assertEquals("Первая задача", manager.currentTask()?.title)
+        assertEquals(TaskStatus.PAUSED, manager.currentTask()?.status)
+        assertNull(manager.activeTask())
+        assertNull(manager.promptContext().systemPromptContribution)
     }
 
     @Test
@@ -141,6 +251,8 @@ class DefaultTaskManagerTest {
 
         assertEquals(1, sessionState.tasks.size)
         assertEquals("task-1", sessionState.activeTaskId)
+        assertEquals(1, manager.listTasks().size)
+        assertEquals("task-1", manager.activeTask()?.id)
         val activeTask = sessionState.activeTask()
         assertNotNull(activeTask)
         assertEquals("Реализовать task subsystem", activeTask.title)

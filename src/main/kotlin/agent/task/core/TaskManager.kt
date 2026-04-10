@@ -1,6 +1,7 @@
 package agent.task.core
 
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
 import agent.task.model.TaskSessionState
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
@@ -16,7 +17,20 @@ interface TaskManager {
     fun sessionState(): TaskSessionState
 
     /**
-     * Возвращает текущую активную задачу или `null`, если активная задача ещё не создана.
+     * Возвращает все задачи, известные текущей session.
+     */
+    fun listTasks(): List<TaskItem>
+
+    /**
+     * Возвращает текущую активную задачу session или `null`, если активная задача сейчас отсутствует.
+     */
+    fun activeTask(): TaskItem?
+
+    /**
+     * Возвращает текущую задачу в совместимом single-task виде.
+     *
+     * В multitask-модели это прежде всего active task, но при её отсутствии метод может вернуть
+     * последний сохранённый рабочий трек, чтобы не ломать существующий single-task contract.
      */
     fun currentTask(): TaskState?
 
@@ -56,14 +70,30 @@ interface TaskManager {
     fun pauseTask(): TaskState
 
     /**
-     * Возобновляет активную задачу.
+     * Возобновляет текущую активную задачу или последнюю paused-задачу в совместимом single-task
+     * режиме.
      */
     fun resumeTask(): TaskState
+
+    /**
+     * Переключает active task на указанную задачу.
+     */
+    fun switchTask(taskId: String): TaskState
+
+    /**
+     * Возобновляет задачу по `taskId`.
+     */
+    fun resumeTask(taskId: String): TaskState
 
     /**
      * Завершает активную задачу.
      */
     fun completeTask(): TaskState
+
+    /**
+     * Завершает задачу по `taskId`.
+     */
+    fun completeTask(taskId: String): TaskState
 
     /**
      * Полностью очищает активную задачу и task session.

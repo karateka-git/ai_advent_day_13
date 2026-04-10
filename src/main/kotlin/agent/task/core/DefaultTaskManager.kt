@@ -28,17 +28,21 @@ class DefaultTaskManager(
 
     override fun sessionState(): TaskSessionState = session
 
-    override fun currentTask(): TaskState? = session.activeTask()?.toTaskState()
+    override fun listTasks(): List<TaskItem> = session.tasks
+
+    override fun activeTask(): TaskItem? = session.activeTask()
+
+    override fun currentTask(): TaskState? = currentCompatibleTask()?.toTaskState()
 
     override fun promptContext(): TaskPromptContext =
         TaskPromptContext(
-            systemPromptContribution = currentTask()?.let(::buildPromptContribution)
+            systemPromptContribution = activeTask()?.toTaskState()?.let(::buildPromptContribution)
         )
 
     override fun startTask(title: String): TaskState {
         require(title.isNotBlank()) { "Название задачи не должно быть пустым." }
 
-        val currentActiveTask = session.activeTask()
+        val currentActiveTask = activeTask()
         val previousTasks = session.tasks.map { task ->
             if (currentActiveTask != null && task.id == currentActiveTask.id && task.status != TaskStatus.DONE) {
                 task.copy(status = TaskStatus.PAUSED)
@@ -69,23 +73,25 @@ class DefaultTaskManager(
         updateCurrentTask { task -> task.copy(expectedAction = action) }
 
     override fun pauseTask(): TaskState =
-        updateCurrentTask { task ->
-            require(task.status != TaskStatus.DONE) {
-                "Нельзя поставить на паузу уже завершённую задачу."
-            }
-            task.copy(status = TaskStatus.PAUSED)
-        }
+        pauseCurrentTask()
 
     override fun resumeTask(): TaskState =
-        updateCurrentTask { task ->
-            require(task.status != TaskStatus.DONE) {
-                "Нельзя возобновить уже завершённую задачу."
-            }
-            task.copy(status = TaskStatus.ACTIVE)
-        }
+        resumeCurrentOrLastPausedTask()
+
+    override fun switchTask(taskId: String): TaskState = activateTask(taskId)
+
+    override fun resumeTask(taskId: String): TaskState = activateTask(taskId)
 
     override fun completeTask(): TaskState =
-        updateCurrentTask { task -> task.copy(status = TaskStatus.DONE) }
+        activeTask()?.let { task -> completeTask(task.id) } ?: error("Нет активной задачи для завершения.")
+
+    override fun completeTask(taskId: String): TaskState = updateTaskState(taskId) { task ->
+        if (task.status == TaskStatus.DONE) {
+            task
+        } else {
+            task.copy(status = TaskStatus.DONE)
+        }
+    }
 
     override fun clearTask() {
         session = TaskSessionState()
@@ -96,18 +102,118 @@ class DefaultTaskManager(
      * Применяет изменение к активной задаче и сохраняет обновлённое состояние.
      */
     private fun updateCurrentTask(transform: (TaskState) -> TaskState): TaskState {
-        val activeTaskId = session.activeTaskId ?: error("Текущая задача ещё не создана.")
-        val existingTask = currentTask() ?: error("Текущая задача ещё не создана.")
-        val updatedTask = TaskItem.fromTaskState(activeTaskId, transform(existingTask))
+        val activeTask = activeTask() ?: error("Текущая задача ещё не создана.")
+        val updatedTask = TaskItem.fromTaskState(activeTask.id, transform(activeTask.toTaskState()))
 
-        session = session.copy(
+        session = TaskSessionState(
             tasks = session.tasks.map { task ->
-                if (task.id == activeTaskId) updatedTask else task
-            }
+                if (task.id == activeTask.id) updatedTask else task
+            },
+            activeTaskId = activeTask.id
         )
         persistSession()
 
         return updatedTask.toTaskState()
+    }
+
+    /**
+     * Ставит текущую активную задачу на паузу и снимает active state.
+     */
+    private fun pauseCurrentTask(): TaskState {
+        val activeTask = activeTask() ?: error("Нет активной задачи для паузы.")
+        require(activeTask.status != TaskStatus.DONE) {
+            "Нельзя поставить на паузу уже завершённую задачу."
+        }
+
+        val updatedTask = activeTask.copy(status = TaskStatus.PAUSED)
+        session = TaskSessionState(
+            tasks = session.tasks.map { task ->
+                if (task.id == activeTask.id) updatedTask else task
+            },
+            activeTaskId = null
+        )
+        persistSession()
+
+        return updatedTask.toTaskState()
+    }
+
+    /**
+     * Делает указанную задачу активной и, если нужно, переводит предыдущую активную задачу в pause.
+     */
+    private fun activateTask(taskId: String): TaskState {
+        val targetTask = requireTask(taskId)
+        require(targetTask.status != TaskStatus.DONE) {
+            "Нельзя переключиться на завершённую задачу."
+        }
+        if (session.activeTaskId == taskId && targetTask.status == TaskStatus.ACTIVE) {
+            return targetTask.toTaskState()
+        }
+
+        val currentActiveTaskId = session.activeTaskId
+        val updatedTasks = session.tasks.map { task ->
+            when (task.id) {
+                taskId -> task.copy(status = TaskStatus.ACTIVE)
+                currentActiveTaskId -> if (task.status == TaskStatus.ACTIVE) task.copy(status = TaskStatus.PAUSED) else task
+                else -> task
+            }
+        }
+
+        session = TaskSessionState(
+            tasks = updatedTasks,
+            activeTaskId = taskId
+        )
+        persistSession()
+
+        return session.task(taskId)?.toTaskState() ?: error("Задача '$taskId' не найдена.")
+    }
+
+    /**
+     * Применяет изменение к задаче и, при необходимости, пересчитывает activeTaskId.
+     */
+    private fun updateTaskState(taskId: String, transform: (TaskItem) -> TaskItem): TaskState {
+        val existingTask = requireTask(taskId)
+        val updatedTask = transform(existingTask)
+        val newActiveTaskId = if (updatedTask.status == TaskStatus.ACTIVE) taskId else {
+            if (session.activeTaskId == taskId) null else session.activeTaskId
+        }
+
+        session = TaskSessionState(
+            tasks = session.tasks.map { task ->
+                if (task.id == taskId) updatedTask else task
+            },
+            activeTaskId = newActiveTaskId
+        )
+        persistSession()
+
+        return updatedTask.toTaskState()
+    }
+
+    /**
+     * Возвращает задачу по id или завершает работу с понятной ошибкой.
+     */
+    private fun requireTask(taskId: String): TaskItem =
+        session.task(taskId) ?: error("Задача '$taskId' не найдена.")
+
+    /**
+     * Возвращает наиболее позднюю paused-задачу, если активной сейчас нет.
+     */
+    private fun lastPausedTask(): TaskItem? =
+        session.tasks.lastOrNull { it.status == TaskStatus.PAUSED }
+
+    /**
+     * Возвращает задачу для совместимого single-task API: active task, если она есть, иначе
+     * последний сохранённый рабочий трек.
+     */
+    private fun currentCompatibleTask(): TaskItem? =
+        activeTask() ?: session.tasks.lastOrNull()
+
+    /**
+     * Применяет compatible no-arg resume к последней paused-задаче, если активной сейчас нет.
+     */
+    private fun resumeCurrentOrLastPausedTask(): TaskState {
+        activeTask()?.let { return it.toTaskState() }
+        val pausedTask = lastPausedTask() ?: error("Нет приостановленной задачи для возобновления.")
+        return activateTask(pausedTask.id)
     }
 
     /**
@@ -151,7 +257,9 @@ class DefaultTaskManager(
     private fun sessionForSingleTask(taskState: TaskState): TaskSessionState =
         TaskSessionState(
             tasks = listOf(TaskItem.fromTaskState(DEFAULT_ACTIVE_TASK_ID, taskState)),
-            activeTaskId = DEFAULT_ACTIVE_TASK_ID
+            activeTaskId = taskState.status
+                .takeIf { it == TaskStatus.ACTIVE }
+                ?.let { DEFAULT_ACTIVE_TASK_ID }
         )
 
     private fun nextTaskId(tasks: List<TaskItem>): String {
