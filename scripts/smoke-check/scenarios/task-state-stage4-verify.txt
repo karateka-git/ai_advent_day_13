@@ -1,5 +1,6 @@
 /task list
 /task show
+Какая задача сейчас активна после перезапуска и какой у неё текущий шаг?
 /task switch task-1
 /task list
 /task show

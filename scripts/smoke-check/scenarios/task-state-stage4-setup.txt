@@ -8,7 +8,10 @@
 /task list
 /task switch task-1
 /task list
+Какая сейчас активная задача и какой у неё следующий рабочий шаг?
 /task resume task-2
+/task list
+Какая сейчас активная задача и что по ней нужно сделать дальше?
 /task done task-1
 /task list
 /exit
