@@ -53,10 +53,15 @@ class CliCommandParserTest {
     fun `parses task commands`() {
         assertEquals(CliCommand.ShowTask, parser.parse("/task"))
         assertEquals(CliCommand.ShowTask, parser.parse("/task show"))
+        assertEquals(CliCommand.ShowTaskList, parser.parse("/task list"))
         assertEquals(CliCommand.ShowTaskCommands, parser.parse("/task help"))
         assertEquals(
             CliCommand.StartTask("Реализовать task subsystem"),
             parser.parse("/task start Реализовать task subsystem")
+        )
+        assertEquals(
+            CliCommand.SwitchTask("task-2"),
+            parser.parse("/task switch task-2")
         )
         assertEquals(
             CliCommand.UpdateTaskStage(TaskStage.VALIDATION),
@@ -71,8 +76,10 @@ class CliCommandParserTest {
             parser.parse("/task expect user_confirmation")
         )
         assertEquals(CliCommand.PauseTask, parser.parse("/task pause"))
-        assertEquals(CliCommand.ResumeTask, parser.parse("/task resume"))
-        assertEquals(CliCommand.CompleteTask, parser.parse("/task done"))
+        assertEquals(CliCommand.ResumeTask(), parser.parse("/task resume"))
+        assertEquals(CliCommand.ResumeTask("task-2"), parser.parse("/task resume task-2"))
+        assertEquals(CliCommand.CompleteTask(), parser.parse("/task done"))
+        assertEquals(CliCommand.CompleteTask("task-2"), parser.parse("/task done task-2"))
         assertEquals(CliCommand.ClearTask, parser.parse("/task clear"))
     }
 
@@ -93,6 +100,10 @@ class CliCommandParserTest {
                 InvalidCliCommandReason.Usage("/task expect <user_input|agent_execution|user_confirmation|none>")
             ),
             parser.parse("/task expect")
+        )
+        assertEquals(
+            CliCommand.InvalidCommand(InvalidCliCommandReason.Usage("/task switch <id>")),
+            parser.parse("/task switch")
         )
     }
 

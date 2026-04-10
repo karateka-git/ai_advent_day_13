@@ -95,6 +95,7 @@ class CliCommandParser {
                 CliCommand.DeleteProfileNote(compactInput.substringAfter("${CliCommands.PROFILE} note delete ").trim())
 
             compactInput.equals(CliCommands.TASK, ignoreCase = true) -> CliCommand.ShowTask
+            compactInput.equals(CliCommands.TASK_LIST, ignoreCase = true) -> CliCommand.ShowTaskList
             compactInput.equals("${CliCommands.TASK} show", ignoreCase = true) -> CliCommand.ShowTask
             compactInput.equals("${CliCommands.TASK} help", ignoreCase = true) -> CliCommand.ShowTaskCommands
             compactInput.equals("${CliCommands.TASK} start", ignoreCase = true) ->
@@ -118,8 +119,16 @@ class CliCommandParser {
             compactInput.startsWith("${CliCommands.TASK} expect ", ignoreCase = true) ->
                 parseTaskExpectedAction(compactInput.substringAfter("${CliCommands.TASK} expect ").trim())
             compactInput.equals("${CliCommands.TASK} pause", ignoreCase = true) -> CliCommand.PauseTask
-            compactInput.equals("${CliCommands.TASK} resume", ignoreCase = true) -> CliCommand.ResumeTask
-            compactInput.equals("${CliCommands.TASK} done", ignoreCase = true) -> CliCommand.CompleteTask
+            compactInput.equals("${CliCommands.TASK} switch", ignoreCase = true) ->
+                CliCommand.InvalidCommand(InvalidCliCommandReason.Usage("/task switch <id>"))
+            compactInput.startsWith("${CliCommands.TASK} switch ", ignoreCase = true) ->
+                CliCommand.SwitchTask(compactInput.substringAfter("${CliCommands.TASK} switch ").trim())
+            compactInput.equals("${CliCommands.TASK} resume", ignoreCase = true) -> CliCommand.ResumeTask()
+            compactInput.startsWith("${CliCommands.TASK} resume ", ignoreCase = true) ->
+                CliCommand.ResumeTask(compactInput.substringAfter("${CliCommands.TASK} resume ").trim())
+            compactInput.equals("${CliCommands.TASK} done", ignoreCase = true) -> CliCommand.CompleteTask()
+            compactInput.startsWith("${CliCommands.TASK} done ", ignoreCase = true) ->
+                CliCommand.CompleteTask(compactInput.substringAfter("${CliCommands.TASK} done ").trim())
             compactInput.equals("${CliCommands.TASK} clear", ignoreCase = true) -> CliCommand.ClearTask
 
             compactInput.equals(CliCommands.CHECKPOINT, ignoreCase = true) -> CliCommand.CreateCheckpoint(null)
@@ -314,14 +323,16 @@ sealed interface CliCommand {
     data class EditProfileNote(val id: String, val edit: ManagedMemoryNoteEdit) : CliCommand
     data class DeleteProfileNote(val id: String) : CliCommand
     data object ShowTask : CliCommand
+    data object ShowTaskList : CliCommand
     data object ShowTaskCommands : CliCommand
     data class StartTask(val title: String) : CliCommand
     data class UpdateTaskStage(val stage: TaskStage) : CliCommand
     data class UpdateTaskStep(val step: String) : CliCommand
     data class UpdateTaskExpectedAction(val action: ExpectedAction) : CliCommand
     data object PauseTask : CliCommand
-    data object ResumeTask : CliCommand
-    data object CompleteTask : CliCommand
+    data class SwitchTask(val taskId: String) : CliCommand
+    data class ResumeTask(val taskId: String? = null) : CliCommand
+    data class CompleteTask(val taskId: String? = null) : CliCommand
     data object ClearTask : CliCommand
     data class InvalidCommand(val reason: InvalidCliCommandReason) : CliCommand
     data class CreateCheckpoint(val name: String?) : CliCommand

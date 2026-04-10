@@ -1,4 +1,4 @@
-package ui.cli
+﻿package ui.cli
 
 import agent.capability.capability
 import agent.core.Agent
@@ -276,6 +276,16 @@ class CliSessionController(
                 CliSessionControllerResult.Continue
             }
 
+            CliCommand.ShowTaskList -> {
+                appEventSink.emit(
+                    AppEvent.TaskListAvailable(
+                        tasks = state.agent.listTasks(),
+                        activeTaskId = state.agent.activeTask()?.id
+                    )
+                )
+                CliSessionControllerResult.Continue
+            }
+
             CliCommand.ShowTaskCommands -> {
                 appEventSink.emit(
                     AppEvent.CommandsAvailable(
@@ -353,8 +363,23 @@ class CliSessionController(
                 CliSessionControllerResult.Continue
             }
 
-            CliCommand.ResumeTask -> {
-                runCatching { state.agent.resumeTask() }
+            is CliCommand.SwitchTask -> {
+                runCatching { state.agent.switchTask(command.taskId) }
+                    .onSuccess { task ->
+                        appEventSink.emit(AppEvent.CommandCompleted("Задача '${task.title}' теперь активна."))
+                    }
+                    .onFailure { appEventSink.emit(AppEvent.RequestFailed(it.message)) }
+                CliSessionControllerResult.Continue
+            }
+
+            is CliCommand.ResumeTask -> {
+                runCatching {
+                    if (command.taskId == null) {
+                        state.agent.resumeTask()
+                    } else {
+                        state.agent.resumeTask(command.taskId)
+                    }
+                }
                     .onSuccess { task ->
                         appEventSink.emit(AppEvent.CommandCompleted("Задача '${task.title}' возобновлена."))
                     }
@@ -362,8 +387,14 @@ class CliSessionController(
                 CliSessionControllerResult.Continue
             }
 
-            CliCommand.CompleteTask -> {
-                runCatching { state.agent.completeTask() }
+            is CliCommand.CompleteTask -> {
+                runCatching {
+                    if (command.taskId == null) {
+                        state.agent.completeTask()
+                    } else {
+                        state.agent.completeTask(command.taskId)
+                    }
+                }
                     .onSuccess { task ->
                         appEventSink.emit(AppEvent.CommandCompleted("Задача '${task.title}' отмечена как завершённая."))
                     }

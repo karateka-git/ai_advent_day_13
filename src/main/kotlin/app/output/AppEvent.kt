@@ -12,6 +12,7 @@ import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.memory.model.UserAccount
 import agent.memory.strategy.MemoryStrategyOption
+import agent.task.model.TaskItem
 import agent.task.model.TaskState
 import llm.core.model.ChatRole
 import llm.core.model.LanguageModelOption
@@ -103,6 +104,14 @@ sealed interface AppEvent {
      */
     data class TaskStateAvailable(
         val task: TaskState?
+    ) : AppEvent
+
+    /**
+     * Список задач conversation-scoped session с пометкой активной задачи.
+     */
+    data class TaskListAvailable(
+        val tasks: List<TaskItem>,
+        val activeTaskId: String?
     ) : AppEvent
 
     /**

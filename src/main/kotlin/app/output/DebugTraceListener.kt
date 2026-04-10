@@ -7,6 +7,7 @@ import agent.memory.model.MemoryOwnerType
 import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
 import agent.task.model.TaskState
 import agent.task.model.TaskStatus
 import agent.task.model.TaskStages
@@ -160,6 +161,12 @@ class DebugTraceListener(
                 kind = "task_state",
                 title = "Задача",
                 lines = buildTaskLines(event.task)
+            )
+
+            is AppEvent.TaskListAvailable -> record(
+                kind = "task_list",
+                title = "Задачи",
+                lines = buildTaskListLines(event.tasks, event.activeTaskId)
             )
 
             is AppEvent.PendingMemoryAvailable ->
@@ -341,6 +348,21 @@ class DebugTraceListener(
                 "Описание этапа: ${TaskStages.definitionFor(task.stage).description}",
                 "Текущий шаг: ${task.currentStep ?: "(не задан)"}"
             )
+        }
+
+    private fun buildTaskListLines(tasks: List<TaskItem>, activeTaskId: String?): List<String> =
+        buildList {
+            add("Активная задача: ${activeTaskId ?: "(нет)"}")
+            if (tasks.isEmpty()) {
+                add("(список задач пуст)")
+            } else {
+                tasks.forEach { task ->
+                    val marker = if (task.id == activeTaskId) "*" else " "
+                    add(
+                        "$marker ${task.id} | ${task.title} | ${taskStatusLabel(task.status)} | ${TaskStages.definitionFor(task.stage).label}"
+                    )
+                }
+            }
         }
 
     private fun buildMemoryLines(snapshot: MemorySnapshot, selectedLayer: MemoryLayer?): List<String> =

@@ -21,6 +21,7 @@ import agent.memory.model.UserAccount
 import agent.memory.strategy.MemoryStrategyOption
 import agent.memory.strategy.MemoryStrategyType
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStatus
@@ -141,6 +142,42 @@ class CliSessionControllerTest {
     }
 
     @Test
+    fun `shows task list with active marker`() {
+        val sink = RecordingAppEventSink()
+        val controller = createController(sink = sink)
+
+        val result = controller.handle("/task list")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.TaskListAvailable(
+                    tasks = listOf(
+                        TaskItem(
+                            id = "task-1",
+                            title = "Реализовать task subsystem",
+                            stage = TaskStage.EXECUTION,
+                            currentStep = "Подключить CLI",
+                            expectedAction = ExpectedAction.AGENT_EXECUTION,
+                            status = TaskStatus.ACTIVE
+                        ),
+                        TaskItem(
+                            id = "task-2",
+                            title = "Подготовить smoke-check",
+                            stage = TaskStage.PLANNING,
+                            currentStep = "Собрать сценарий",
+                            expectedAction = ExpectedAction.USER_INPUT,
+                            status = TaskStatus.PAUSED
+                        )
+                    ),
+                    activeTaskId = "task-1"
+                )
+            ),
+            sink.events
+        )
+    }
+
+    @Test
     fun `updates task through current agent`() {
         val sink = RecordingAppEventSink()
         val agent = FakeAgent()
@@ -156,6 +193,71 @@ class CliSessionControllerTest {
         assertEquals(
             listOf<AppEvent>(
                 AppEvent.CommandCompleted("Задача 'Реализовать task subsystem' поставлена на паузу.")
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `switches task by id through current agent`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent()
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("/task switch task-2")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals("task-2", agent.activeTask()?.id)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.CommandCompleted("Задача 'Подготовить smoke-check' теперь активна.")
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `resumes task by id through current agent`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent().apply {
+            taskState = requireTaskState().copy(status = TaskStatus.PAUSED)
+        }
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("/task resume task-2")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(TaskStatus.ACTIVE, agent.activeTask()?.status)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.CommandCompleted("Задача 'Подготовить smoke-check' возобновлена.")
+            ),
+            sink.events
+        )
+    }
+
+    @Test
+    fun `completes task by id through current agent`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent()
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("/task done task-2")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals(TaskStatus.DONE, agent.listTasks().first { it.id == "task-2" }.status)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.CommandCompleted("Задача 'Подготовить smoke-check' отмечена как завершённая.")
             ),
             sink.events
         )
@@ -548,8 +650,29 @@ private class FakeAgent(
 
     override fun inspectTask(): TaskState? = taskState
 
+    override fun listTasks(): List<TaskItem> = taskItems.toList()
+
+    override fun activeTask(): TaskItem? = activeTaskId?.let { id -> taskItems.firstOrNull { it.id == id } }
+
     override fun startTask(title: String): TaskState =
-        TaskState(title = title).also { taskState = it }
+        TaskState(title = title).also {
+            val newItem = TaskItem(
+                id = "task-${taskItems.size + 1}",
+                title = title,
+                stage = TaskStage.PLANNING,
+                currentStep = null,
+                expectedAction = ExpectedAction.NONE,
+                status = TaskStatus.ACTIVE
+            )
+            activeTaskId?.let { currentId ->
+                replaceTask(
+                    requireTaskItem(currentId).copy(status = TaskStatus.PAUSED)
+                )
+            }
+            taskItems += newItem
+            activeTaskId = newItem.id
+            taskState = it
+        }
 
     override fun updateTaskStage(stage: TaskStage): TaskState =
         requireTaskState().copy(stage = stage).also { taskState = it }
@@ -561,13 +684,44 @@ private class FakeAgent(
         requireTaskState().copy(expectedAction = action).also { taskState = it }
 
     override fun pauseTask(): TaskState =
-        requireTaskState().copy(status = TaskStatus.PAUSED).also { taskState = it }
+        requireTaskState().copy(status = TaskStatus.PAUSED).also {
+            taskState = it
+            activeTaskId?.let { id ->
+                replaceTask(requireTaskItem(id).copy(status = TaskStatus.PAUSED))
+            }
+        }
 
     override fun resumeTask(): TaskState =
-        requireTaskState().copy(status = TaskStatus.ACTIVE).also { taskState = it }
+        requireTaskState().copy(status = TaskStatus.ACTIVE).also {
+            taskState = it
+            activeTaskId?.let { id ->
+                replaceTask(requireTaskItem(id).copy(status = TaskStatus.ACTIVE))
+            }
+        }
+
+    override fun switchTask(taskId: String): TaskState = activateTask(taskId)
+
+    override fun resumeTask(taskId: String): TaskState = activateTask(taskId).also { resumed ->
+        replaceTask(requireTaskItem(taskId).copy(status = TaskStatus.ACTIVE))
+        taskState = resumed
+    }
 
     override fun completeTask(): TaskState =
-        requireTaskState().copy(status = TaskStatus.DONE).also { taskState = it }
+        requireTaskState().copy(status = TaskStatus.DONE).also {
+            taskState = it
+            activeTaskId?.let { id ->
+                replaceTask(requireTaskItem(id).copy(status = TaskStatus.DONE))
+            }
+        }
+
+    override fun completeTask(taskId: String): TaskState =
+        requireTaskItem(taskId).copy(status = TaskStatus.DONE).also { completed ->
+            replaceTask(completed)
+            if (activeTaskId == taskId) {
+                activeTaskId = taskItems.firstOrNull { it.id != taskId && it.status == TaskStatus.ACTIVE }?.id
+                taskState = activeTask()?.toTaskState()
+            }
+        }.toTaskState()
 
     override fun clearTask() {
         taskState = null
@@ -641,6 +795,49 @@ private class FakeAgent(
 
     fun requireTaskState(): TaskState =
         requireNotNull(taskState) { "Текущая задача в тестовом агенте не создана." }
+
+    private val taskItems = mutableListOf(
+        TaskItem(
+            id = "task-1",
+            title = "Реализовать task subsystem",
+            stage = TaskStage.EXECUTION,
+            currentStep = "Подключить CLI",
+            expectedAction = ExpectedAction.AGENT_EXECUTION,
+            status = TaskStatus.ACTIVE
+        ),
+        TaskItem(
+            id = "task-2",
+            title = "Подготовить smoke-check",
+            stage = TaskStage.PLANNING,
+            currentStep = "Собрать сценарий",
+            expectedAction = ExpectedAction.USER_INPUT,
+            status = TaskStatus.PAUSED
+        )
+    )
+
+    private var activeTaskId: String? = "task-1"
+
+    private fun replaceTask(task: TaskItem) {
+        val index = taskItems.indexOfFirst { it.id == task.id }
+        require(index >= 0) { "Task ${task.id} not found" }
+        taskItems[index] = task
+    }
+
+    private fun requireTaskItem(taskId: String): TaskItem =
+        taskItems.firstOrNull { it.id == taskId } ?: error("Task $taskId not found")
+
+    private fun activateTask(taskId: String): TaskState {
+        val currentActiveId = activeTaskId
+        val targetTask = requireTaskItem(taskId)
+        if (currentActiveId != null && currentActiveId != taskId) {
+            replaceTask(requireTaskItem(currentActiveId).copy(status = TaskStatus.PAUSED))
+        }
+        val activated = targetTask.copy(status = TaskStatus.ACTIVE)
+        replaceTask(activated)
+        activeTaskId = taskId
+        taskState = activated.toTaskState()
+        return taskState!!
+    }
 
     companion object {
         fun memorySnapshot(): MemorySnapshot =

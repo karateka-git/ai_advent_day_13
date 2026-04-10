@@ -7,6 +7,7 @@ import agent.memory.model.MemorySnapshot
 import agent.memory.model.PendingMemoryState
 import agent.memory.strategy.MemoryStrategyOption
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
 import agent.task.model.TaskStatus
 import agent.task.model.TaskState
 import agent.task.model.TaskStages
@@ -129,6 +130,8 @@ class CliRenderer(
             }
 
             is AppEvent.TaskStateAvailable -> renderTaskState(event.task)
+
+            is AppEvent.TaskListAvailable -> renderTaskList(event.tasks, event.activeTaskId)
 
             is AppEvent.PendingMemoryAvailable -> {
                 if (event.reason != null) {
@@ -306,6 +309,29 @@ class CliRenderer(
 
         renderBorderedBlock(
             title = "Pending-память",
+            lines = lines
+        )
+    }
+
+    private fun renderTaskList(tasks: List<TaskItem>, activeTaskId: String?) {
+        val lines = buildList {
+            add("Активная задача: ${activeTaskId ?: "(нет)"}")
+            if (tasks.isEmpty()) {
+                add("(список задач пуст)")
+            } else {
+                tasks.forEach { task ->
+                    val marker = if (task.id == activeTaskId) "*" else " "
+                    add(
+                        "$marker ${task.id} | ${task.title} | ${taskStatusLabel(task.status)} | ${
+                            TaskStages.definitionFor(task.stage).label
+                        }"
+                    )
+                }
+            }
+        }
+
+        renderBorderedBlock(
+            title = "Задачи",
             lines = lines
         )
     }

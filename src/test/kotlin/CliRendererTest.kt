@@ -7,6 +7,7 @@ import agent.memory.model.PendingMemoryState
 import agent.memory.model.ShortTermMemory
 import agent.memory.strategy.MemoryStrategyType
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStatus
@@ -115,6 +116,42 @@ class CliRendererTest {
         assertTrue(output.contains("Проверка"))
         assertTrue(output.contains("на паузе"))
         assertTrue(output.contains("ожидается подтверждение пользователя"))
+    }
+
+    @Test
+    fun `task list prints active marker and task summary`() {
+        val output = captureStdout {
+            CliRenderer().emit(
+                AppEvent.TaskListAvailable(
+                    tasks = listOf(
+                        TaskItem(
+                            id = "task-1",
+                            title = "Реализовать task subsystem",
+                            stage = TaskStage.EXECUTION,
+                            currentStep = "Подключить CLI",
+                            expectedAction = ExpectedAction.AGENT_EXECUTION,
+                            status = TaskStatus.PAUSED
+                        ),
+                        TaskItem(
+                            id = "task-2",
+                            title = "Подготовить smoke-check",
+                            stage = TaskStage.VALIDATION,
+                            currentStep = "Прогнать сценарий",
+                            expectedAction = ExpectedAction.USER_CONFIRMATION,
+                            status = TaskStatus.ACTIVE
+                        )
+                    ),
+                    activeTaskId = "task-2"
+                )
+            )
+        }
+
+        assertTrue(output.contains("Задачи"))
+        assertTrue(output.contains("Активная задача: task-2"))
+        assertTrue(output.contains("* task-2 | Подготовить smoke-check"))
+        assertTrue(output.contains("task-1 | Реализовать task subsystem"))
+        assertTrue(output.contains("Активна"))
+        assertTrue(output.contains("Проверка"))
     }
 
     @Test

@@ -12,6 +12,7 @@ import agent.memory.model.PendingMemoryActionResult
 import agent.memory.model.PendingMemoryEdit
 import agent.memory.model.UserAccount
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import java.nio.file.Path
@@ -106,6 +107,16 @@ interface Agent<T> {
     fun inspectTask(): TaskState?
 
     /**
+     * Возвращает список всех задач, известных текущей conversation-scoped session.
+     */
+    fun listTasks(): List<TaskItem>
+
+    /**
+     * Возвращает активную задачу session или `null`, если активной задачи сейчас нет.
+     */
+    fun activeTask(): TaskItem?
+
+    /**
      * Создаёт новую текущую задачу.
      */
     fun startTask(title: String): TaskState
@@ -136,9 +147,24 @@ interface Agent<T> {
     fun resumeTask(): TaskState
 
     /**
+     * Делает указанную задачу активной.
+     */
+    fun switchTask(taskId: String): TaskState
+
+    /**
+     * Возобновляет задачу по id.
+     */
+    fun resumeTask(taskId: String): TaskState
+
+    /**
      * Помечает текущую задачу как завершённую.
      */
     fun completeTask(): TaskState
+
+    /**
+     * Помечает задачу по id как завершённую.
+     */
+    fun completeTask(taskId: String): TaskState
 
     /**
      * Полностью очищает текущую задачу.

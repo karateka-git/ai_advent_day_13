@@ -32,6 +32,7 @@ import agent.task.core.DefaultTaskManager
 import agent.task.core.TaskManager
 import agent.task.core.TaskOrchestrationService
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStages
@@ -185,6 +186,10 @@ class MrAgent(
 
     override fun inspectTask(): TaskState? = taskManager.currentTask()
 
+    override fun listTasks(): List<TaskItem> = taskManager.listTasks()
+
+    override fun activeTask(): TaskItem? = taskManager.activeTask()
+
     override fun startTask(title: String): TaskState = taskManager.startTask(title)
 
     override fun updateTaskStage(stage: TaskStage): TaskState = taskManager.updateStage(stage)
@@ -198,7 +203,13 @@ class MrAgent(
 
     override fun resumeTask(): TaskState = taskManager.resumeTask()
 
+    override fun switchTask(taskId: String): TaskState = taskManager.switchTask(taskId)
+
+    override fun resumeTask(taskId: String): TaskState = taskManager.resumeTask(taskId)
+
     override fun completeTask(): TaskState = taskManager.completeTask()
+
+    override fun completeTask(taskId: String): TaskState = taskManager.completeTask(taskId)
 
     override fun clearTask() {
         taskManager.clearTask()
