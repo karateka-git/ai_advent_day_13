@@ -116,6 +116,20 @@ class DefaultTaskManagerTest {
     }
 
     @Test
+    fun `switching already active task keeps state stable`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.startTask("Вторая задача")
+
+        val switchedTask = manager.switchTask("task-2")
+
+        assertEquals("Вторая задача", switchedTask.title)
+        assertEquals("task-2", manager.sessionState().activeTaskId)
+        assertEquals(TaskStatus.ACTIVE, manager.sessionState().task("task-2")?.status)
+        assertEquals(TaskStatus.PAUSED, manager.sessionState().task("task-1")?.status)
+    }
+
+    @Test
     fun `resumes paused task by id`() {
         val manager = DefaultTaskManager()
         manager.startTask("Первая задача")
@@ -129,6 +143,33 @@ class DefaultTaskManagerTest {
     }
 
     @Test
+    fun `resuming paused task by id pauses current active task`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.startTask("Вторая задача")
+
+        val resumedTask = manager.resumeTask("task-1")
+
+        assertEquals(TaskStatus.ACTIVE, resumedTask.status)
+        assertEquals("task-1", manager.sessionState().activeTaskId)
+        assertEquals(TaskStatus.ACTIVE, manager.sessionState().task("task-1")?.status)
+        assertEquals(TaskStatus.PAUSED, manager.sessionState().task("task-2")?.status)
+    }
+
+    @Test
+    fun `resuming completed task by id fails`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.completeTask()
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            manager.resumeTask("task-1")
+        }
+
+        assertEquals("Нельзя возобновить завершённую задачу.", error.message)
+    }
+
+    @Test
     fun `completes task by id and clears active task`() {
         val manager = DefaultTaskManager()
         manager.startTask("Первая задача")
@@ -139,6 +180,46 @@ class DefaultTaskManagerTest {
         assertNull(manager.activeTask())
         assertNull(manager.sessionState().activeTaskId)
         assertEquals(TaskStatus.DONE, manager.sessionState().task("task-1")?.status)
+    }
+
+    @Test
+    fun `completing paused task by id preserves current active task`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.startTask("Вторая задача")
+
+        val completedTask = manager.completeTask("task-1")
+
+        assertEquals(TaskStatus.DONE, completedTask.status)
+        assertEquals("task-2", manager.sessionState().activeTaskId)
+        assertEquals(TaskStatus.DONE, manager.sessionState().task("task-1")?.status)
+        assertEquals(TaskStatus.ACTIVE, manager.sessionState().task("task-2")?.status)
+    }
+
+    @Test
+    fun `completing already completed task by id fails`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.completeTask()
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            manager.completeTask("task-1")
+        }
+
+        assertEquals("Задача 'task-1' уже завершена.", error.message)
+    }
+
+    @Test
+    fun `switching to completed task by id fails`() {
+        val manager = DefaultTaskManager()
+        manager.startTask("Первая задача")
+        manager.completeTask()
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            manager.switchTask("task-1")
+        }
+
+        assertEquals("Нельзя переключиться на завершённую задачу.", error.message)
     }
 
     @Test

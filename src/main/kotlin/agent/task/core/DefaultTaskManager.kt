@@ -80,17 +80,18 @@ class DefaultTaskManager(
 
     override fun switchTask(taskId: String): TaskState = activateTask(taskId)
 
-    override fun resumeTask(taskId: String): TaskState = activateTask(taskId)
+    override fun resumeTask(taskId: String): TaskState = resumeTaskById(taskId)
 
     override fun completeTask(): TaskState =
         activeTask()?.let { task -> completeTask(task.id) } ?: error("Нет активной задачи для завершения.")
 
-    override fun completeTask(taskId: String): TaskState = updateTaskState(taskId) { task ->
-        if (task.status == TaskStatus.DONE) {
-            task
-        } else {
-            task.copy(status = TaskStatus.DONE)
+    override fun completeTask(taskId: String): TaskState {
+        val targetTask = requireTask(taskId)
+        require(targetTask.status != TaskStatus.DONE) {
+            "Задача '$taskId' уже завершена."
         }
+
+        return updateTaskState(taskId) { task -> task.copy(status = TaskStatus.DONE) }
     }
 
     override fun clearTask() {
@@ -165,6 +166,24 @@ class DefaultTaskManager(
         persistSession()
 
         return session.task(taskId)?.toTaskState() ?: error("Задача '$taskId' не найдена.")
+    }
+
+    /**
+     * Возобновляет только paused-задачу, сохраняя смысл resume как восстановления рабочей задачи.
+     */
+    private fun resumeTaskById(taskId: String): TaskState {
+        val targetTask = requireTask(taskId)
+        require(targetTask.status != TaskStatus.DONE) {
+            "Нельзя возобновить завершённую задачу."
+        }
+        if (session.activeTaskId == taskId && targetTask.status == TaskStatus.ACTIVE) {
+            return targetTask.toTaskState()
+        }
+        require(targetTask.status == TaskStatus.PAUSED) {
+            "Можно возобновить только приостановленную задачу."
+        }
+
+        return activateTask(taskId)
     }
 
     /**
