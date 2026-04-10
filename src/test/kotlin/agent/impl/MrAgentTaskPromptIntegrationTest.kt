@@ -131,6 +131,34 @@ class MrAgentTaskPromptIntegrationTest {
         assertTrue(notice.contains("этап — планирование"))
         assertTrue(notice.contains("ждёт твоего решения"))
     }
+
+    @Test
+    fun `prompt uses only active task when previous task is paused`() {
+        val languageModel = RecordingLanguageModel()
+        val taskManager = DefaultTaskManager().apply {
+            startTask("Первая задача")
+            updateStep("Старый шаг")
+            pauseTask()
+            startTask("Вторая задача")
+            updateStage(TaskStage.VALIDATION)
+            updateStep("Проверить новый результат")
+            updateExpectedAction(ExpectedAction.USER_CONFIRMATION)
+        }
+        val agent = MrAgent(
+            languageModel = languageModel,
+            lifecycleListener = NoOpAgentLifecycleListener,
+            memoryStrategy = NoCompressionMemoryStrategy(),
+            taskManager = taskManager
+        )
+
+        agent.ask("Проверь текущую задачу")
+
+        val systemMessage = languageModel.lastMessages.first()
+        assertTrue(systemMessage.content.contains("Вторая задача"))
+        assertTrue(systemMessage.content.contains("Проверить новый результат"))
+        assertFalse(systemMessage.content.contains("Первая задача"))
+        assertFalse(systemMessage.content.contains("Старый шаг"))
+    }
 }
 
 private class RecordingLanguageModel(

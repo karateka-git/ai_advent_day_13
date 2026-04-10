@@ -162,6 +162,29 @@ class CliSessionControllerTest {
     }
 
     @Test
+    fun `starting task reports that previous active task was paused`() {
+        val sink = RecordingAppEventSink()
+        val agent = FakeAgent()
+        val controller = createController(
+            sink = sink,
+            initialState = initialState(agent = agent)
+        )
+
+        val result = controller.handle("/task start Вторая задача")
+
+        assertEquals(CliSessionControllerResult.Continue, result)
+        assertEquals("Вторая задача", agent.taskState?.title)
+        assertEquals(
+            listOf<AppEvent>(
+                AppEvent.CommandCompleted(
+                    "Создана задача 'Вторая задача' на этапе Планирование. Предыдущая активная задача 'Реализовать task subsystem' сохранена и переведена в паузу."
+                )
+            ),
+            sink.events
+        )
+    }
+
+    @Test
     fun `regular prompt does not mutate paused task state`() {
         val sink = RecordingAppEventSink()
         val agent = FakeAgent().apply {

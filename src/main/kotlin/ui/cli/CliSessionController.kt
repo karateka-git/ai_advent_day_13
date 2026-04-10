@@ -12,6 +12,7 @@ import agent.memory.strategy.MemoryStrategyType
 import agent.memory.strategy.branching.BranchingCapability
 import agent.task.model.ExpectedAction
 import agent.task.model.TaskStage
+import agent.task.model.TaskStatus
 import agent.task.model.TaskStages
 import app.output.AppEvent
 import app.output.AppEventSink
@@ -286,11 +287,17 @@ class CliSessionController(
             }
 
             is CliCommand.StartTask -> {
+                val previousTask = state.agent.inspectTask()
                 runCatching { state.agent.startTask(command.title) }
                     .onSuccess { task ->
                         appEventSink.emit(
                             AppEvent.CommandCompleted(
-                                "Создана задача '${task.title}' на этапе ${taskStageLabel(task.stage)}."
+                                "Создана задача '${task.title}' на этапе ${taskStageLabel(task.stage)}." +
+                                    if (previousTask != null && previousTask.status != TaskStatus.DONE) {
+                                        " Предыдущая активная задача '${previousTask.title}' сохранена и переведена в паузу."
+                                    } else {
+                                        ""
+                                    }
                             )
                         )
                     }
