@@ -7,6 +7,8 @@ param(
 
     [switch]$ClearConversations,
 
+    [switch]$ClearSmokeArtifacts,
+
     [switch]$NoIncludeModelPrompt
 )
 
@@ -32,6 +34,10 @@ if (-not (Test-Path -LiteralPath $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir | Out-Null
 }
 
+if ($ClearSmokeArtifacts -and (Test-Path -LiteralPath $outputDir)) {
+    Get-ChildItem -LiteralPath $outputDir -File | Remove-Item -Force
+}
+
 $scenarioBaseName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedOutputFile)
 $traceFile = Join-Path $outputDir "$scenarioBaseName-trace.jsonl"
 
@@ -40,6 +46,7 @@ if ($ClearConversations -and (Test-Path -LiteralPath $conversationsDir)) {
 }
 
 Remove-Item -LiteralPath $traceFile -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $resolvedOutputFile -Force -ErrorAction SilentlyContinue
 
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8

@@ -12,6 +12,7 @@
 
 - перед scripted smoke-check всегда делать свежие `.\gradlew.bat build` и `.\gradlew.bat installDist`;
 - перед multitask smoke-check очищать `config/conversations/*` и `config/tasks/*`, чтобы `task-1` и `task-2` создавались предсказуемо;
+- перед первым прогоном в серии очищать `build/smoke-check/*`, чтобы в папке оставались только актуальные артефакты;
 - `setup` и `verify` запускать строго последовательно;
 - ориентироваться на `build/smoke-check/*-trace.jsonl` и `build/smoke-check/*-output.txt`;
 - сырой stdout по умолчанию не нужен;
@@ -46,7 +47,7 @@
 Команда:
 
 ```powershell
-.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-stage4-setup.txt -OutputFile .\build\smoke-check\task-state-stage4-setup-output.txt -ClearConversations
+.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-stage4-setup.txt -OutputFile .\build\smoke-check\task-state-stage4-setup-output.txt -ClearConversations -ClearSmokeArtifacts
 ```
 
 Что проверяем:
