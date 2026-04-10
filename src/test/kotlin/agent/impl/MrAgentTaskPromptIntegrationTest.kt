@@ -5,9 +5,14 @@ import agent.memory.strategy.nocompression.NoCompressionMemoryStrategy
 import agent.task.core.DefaultTaskManager
 import agent.task.core.DefaultTaskOrchestrationService
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
+import agent.task.model.TaskSessionState
 import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStages
+import agent.task.model.TaskStatus
+import agent.task.persistence.JsonTaskStateRepository
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -158,6 +163,44 @@ class MrAgentTaskPromptIntegrationTest {
         assertTrue(systemMessage.content.contains("Проверить новый результат"))
         assertFalse(systemMessage.content.contains("Первая задача"))
         assertFalse(systemMessage.content.contains("Старый шаг"))
+    }
+
+    @Test
+    fun `agent restores active task from persisted task session state`() {
+        val storageDir = Files.createTempDirectory("task-stage3-agent-test")
+        val repository = JsonTaskStateRepository(storageDir.resolve("task-state.json"))
+        repository.save(
+            TaskSessionState(
+                tasks = listOf(
+                    TaskItem(
+                        id = "task-1",
+                        title = "Первая задача",
+                        status = TaskStatus.PAUSED
+                    ),
+                    TaskItem(
+                        id = "task-2",
+                        title = "Вторая задача",
+                        stage = TaskStage.VALIDATION,
+                        currentStep = "Проверить вторую задачу",
+                        status = TaskStatus.ACTIVE
+                    )
+                ),
+                activeTaskId = "task-2"
+            )
+        )
+        val agent = MrAgent(
+            languageModel = RecordingLanguageModel(),
+            lifecycleListener = NoOpAgentLifecycleListener,
+            memoryStrategy = NoCompressionMemoryStrategy(),
+            taskManager = DefaultTaskManager(repository = repository)
+        )
+
+        val currentTask = agent.inspectTask()
+
+        assertNotNull(currentTask)
+        assertEquals("Вторая задача", currentTask.title)
+        assertEquals(TaskStage.VALIDATION, currentTask.stage)
+        assertEquals("Проверить вторую задачу", currentTask.currentStep)
     }
 }
 

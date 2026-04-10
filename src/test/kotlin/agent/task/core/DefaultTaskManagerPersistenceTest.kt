@@ -49,6 +49,25 @@ class DefaultTaskManagerPersistenceTest {
     }
 
     @Test
+    fun `loads active task correctly when repository stores multiple tasks`() {
+        val repository = InMemoryTaskSessionStateRepository()
+        val manager = DefaultTaskManager(repository = repository)
+
+        manager.startTask("Первая задача")
+        manager.pauseTask()
+        manager.startTask("Вторая задача")
+        manager.updateStage(TaskStage.VALIDATION)
+
+        val restoredManager = DefaultTaskManager(repository = repository)
+
+        assertEquals(2, restoredManager.sessionState().tasks.size)
+        assertEquals("task-2", restoredManager.sessionState().activeTaskId)
+        assertEquals("Вторая задача", restoredManager.currentTask()?.title)
+        assertEquals(TaskStage.VALIDATION, restoredManager.currentTask()?.stage)
+        assertEquals(TaskStatus.PAUSED, restoredManager.sessionState().tasks.first { it.id == "task-1" }.status)
+    }
+
+    @Test
     fun `clears repository when task is cleared`() {
         val repository = InMemoryTaskSessionStateRepository(
             initialState = TaskSessionState(

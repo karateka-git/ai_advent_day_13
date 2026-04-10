@@ -30,8 +30,8 @@ TIMEWEB_USER_TOKEN=dummy-token
 2. Очистить runtime-артефакты task smoke-check:
 
 ```powershell
-Remove-Item -LiteralPath .\config\conversations\* -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath .\config\tasks\* -Force -ErrorAction SilentlyContinue
+Get-ChildItem -LiteralPath .\config\conversations -File -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem -LiteralPath .\config\tasks -File -ErrorAction SilentlyContinue | Remove-Item -Force
 ```
 
 3. Собрать и установить свежую версию:
@@ -155,6 +155,43 @@ scripts/smoke-check/scenarios/task-state-stage1-verify.txt
 - в paused-сценарии нет `Запрос к модели`, если блокировка сработала;
 - scripted output помогает глазами проверить, что stage 2 реально заметен пользователю.
 
+## Scripted Run 1: Stage 3 Multitask Setup
+
+Команда:
+
+```powershell
+.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-stage3-setup.txt -OutputFile .\build\smoke-check\task-state-stage3-setup-output.txt -ClearConversations
+```
+
+Что проверяем:
+- `/task start` для второй задачи не стирает первую;
+- при создании второй задачи первая активная переводится в паузу;
+- `/task show` продолжает показывать только текущую активную задачу;
+- persisted task storage уже содержит несколько задач и `activeTaskId`.
+
+Ожидаемый результат:
+- в output видно сообщение, что предыдущая активная задача сохранена и переведена в паузу;
+- `/task show` показывает вторую задачу как текущую;
+- в `config/tasks/` после прогона лежит JSON с двумя задачами и `activeTaskId = task-2`.
+
+## Scripted Run 2: Stage 3 Restore
+
+Команда:
+
+```powershell
+.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-stage3-verify.txt -OutputFile .\build\smoke-check\task-state-stage3-verify-output.txt
+```
+
+Что проверяем:
+- после нового запуска активная задача восстанавливается из persisted session state;
+- paused-первая задача не становится активной случайно;
+- current task UX остаётся минимальным и показывает только активную задачу.
+
+Ожидаемый результат:
+- `/task show` после restart показывает вторую задачу;
+- в trace/output нет признаков, что первая paused-задача попала в текущий task context;
+- persisted JSON по-прежнему содержит обе задачи.
+
 ## Что посмотреть после прогона
 
 1. Вывод:
@@ -163,6 +200,8 @@ scripts/smoke-check/scenarios/task-state-stage1-verify.txt
 build/smoke-check/task-state-stage1-setup-output.txt
 build/smoke-check/task-state-stage1-verify-output.txt
 build/smoke-check/task-state-stage2-output.txt
+build/smoke-check/task-state-stage3-setup-output.txt
+build/smoke-check/task-state-stage3-verify-output.txt
 ```
 
 Дополнительно:
