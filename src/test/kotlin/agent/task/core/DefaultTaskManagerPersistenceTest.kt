@@ -1,10 +1,11 @@
 package agent.task.core
 
 import agent.task.model.ExpectedAction
+import agent.task.model.TaskItem
+import agent.task.model.TaskSessionState
 import agent.task.model.TaskStage
-import agent.task.model.TaskState
 import agent.task.model.TaskStatus
-import agent.task.persistence.TaskStateRepository
+import agent.task.persistence.TaskSessionStateRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -12,24 +13,31 @@ import kotlin.test.assertNull
 class DefaultTaskManagerPersistenceTest {
     @Test
     fun `loads current task from repository on startup`() {
-        val repository = InMemoryTaskStateRepository(
-            initialState = TaskState(
-                title = "Реализовать task subsystem",
-                stage = TaskStage.EXECUTION,
-                currentStep = "Добавить persistence",
-                expectedAction = ExpectedAction.AGENT_EXECUTION,
-                status = TaskStatus.ACTIVE
+        val repository = InMemoryTaskSessionStateRepository(
+            initialState = TaskSessionState(
+                tasks = listOf(
+                    TaskItem(
+                        id = "task-1",
+                        title = "Реализовать task subsystem",
+                        stage = TaskStage.EXECUTION,
+                        currentStep = "Добавить persistence",
+                        expectedAction = ExpectedAction.AGENT_EXECUTION,
+                        status = TaskStatus.ACTIVE
+                    )
+                ),
+                activeTaskId = "task-1"
             )
         )
 
         val manager = DefaultTaskManager(repository = repository)
 
-        assertEquals(repository.state, manager.currentTask())
+        assertEquals("Реализовать task subsystem", manager.currentTask()?.title)
+        assertEquals(repository.state, manager.sessionState())
     }
 
     @Test
-    fun `persists task updates through repository`() {
-        val repository = InMemoryTaskStateRepository()
+    fun `persists task session updates through repository`() {
+        val repository = InMemoryTaskSessionStateRepository()
         val manager = DefaultTaskManager(repository = repository)
 
         manager.startTask("Реализовать task subsystem")
@@ -37,13 +45,16 @@ class DefaultTaskManagerPersistenceTest {
         manager.updateExpectedAction(ExpectedAction.USER_CONFIRMATION)
         manager.pauseTask()
 
-        assertEquals(manager.currentTask(), repository.state)
+        assertEquals(manager.sessionState(), repository.state)
     }
 
     @Test
     fun `clears repository when task is cleared`() {
-        val repository = InMemoryTaskStateRepository(
-            initialState = TaskState(title = "Реализовать task subsystem")
+        val repository = InMemoryTaskSessionStateRepository(
+            initialState = TaskSessionState(
+                tasks = listOf(TaskItem(id = "task-1", title = "Реализовать task subsystem")),
+                activeTaskId = "task-1"
+            )
         )
         val manager = DefaultTaskManager(repository = repository)
 
@@ -54,14 +65,14 @@ class DefaultTaskManagerPersistenceTest {
     }
 }
 
-private class InMemoryTaskStateRepository(
-    initialState: TaskState? = null
-) : TaskStateRepository {
-    var state: TaskState? = initialState
+private class InMemoryTaskSessionStateRepository(
+    initialState: TaskSessionState? = null
+) : TaskSessionStateRepository {
+    var state: TaskSessionState? = initialState
 
-    override fun load(): TaskState? = state
+    override fun load(): TaskSessionState? = state
 
-    override fun save(state: TaskState) {
+    override fun save(state: TaskSessionState) {
         this.state = state
     }
 

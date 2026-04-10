@@ -1,6 +1,6 @@
 package agent.task.persistence
 
-import agent.task.model.TaskState
+import agent.task.model.TaskSessionState
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlinx.serialization.json.Json
@@ -9,20 +9,20 @@ import llm.core.LanguageModel
 private const val TASK_CONTEXT_DIRECTORY = "config/tasks"
 
 /**
- * JSON-репозиторий одной текущей conversation-scoped задачи.
+ * JSON-репозиторий полного conversation-scoped task session state.
  *
  * Task subsystem хранится отдельно от memory subsystem, но использует похожую
  * модель привязки к текущей паре провайдер/модель.
  */
 class JsonTaskStateRepository(
     private val storagePath: Path
-) : TaskStateRepository {
+) : TaskSessionStateRepository {
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
     }
 
-    override fun load(): TaskState? {
+    override fun load(): TaskSessionState? {
         if (!Files.exists(storagePath)) {
             return null
         }
@@ -32,10 +32,10 @@ class JsonTaskStateRepository(
             return null
         }
 
-        return json.decodeFromString<TaskState>(rawContent)
+        return json.decodeFromString<TaskSessionState>(rawContent)
     }
 
-    override fun save(state: TaskState) {
+    override fun save(state: TaskSessionState) {
         val parent = storagePath.parent
         if (parent != null) {
             Files.createDirectories(parent)
@@ -43,7 +43,7 @@ class JsonTaskStateRepository(
 
         Files.writeString(
             storagePath,
-            json.encodeToString(TaskState.serializer(), state)
+            json.encodeToString(TaskSessionState.serializer(), state)
         )
     }
 
@@ -54,18 +54,12 @@ class JsonTaskStateRepository(
     companion object {
         /**
          * Создаёт репозиторий, привязанный к файлу состояния конкретной модели.
-         *
-         * @param languageModel активная языковая модель.
-         * @return JSON-репозиторий task state для этой модели.
          */
         fun forLanguageModel(languageModel: LanguageModel): JsonTaskStateRepository =
             JsonTaskStateRepository(buildStoragePath(languageModel))
 
         /**
          * Строит путь к JSON-файлу task state для пары провайдер/модель.
-         *
-         * @param languageModel активная языковая модель.
-         * @return путь к JSON-файлу task subsystem.
          */
         internal fun buildStoragePath(languageModel: LanguageModel): Path {
             val providerPart = sanitizePathPart(languageModel.info.name)
@@ -73,12 +67,6 @@ class JsonTaskStateRepository(
             return Path.of(TASK_CONTEXT_DIRECTORY, "${providerPart}__${modelPart}.json")
         }
 
-        /**
-         * Преобразует имя провайдера или модели в безопасный сегмент пути.
-         *
-         * @param value исходное имя.
-         * @return безопасный сегмент пути.
-         */
         private fun sanitizePathPart(value: String): String =
             value
                 .lowercase()

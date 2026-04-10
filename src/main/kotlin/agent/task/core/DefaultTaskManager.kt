@@ -7,7 +7,7 @@ import agent.task.model.TaskStage
 import agent.task.model.TaskState
 import agent.task.model.TaskStatus
 import agent.task.model.TaskStages
-import agent.task.persistence.TaskStateRepository
+import agent.task.persistence.TaskSessionStateRepository
 import agent.task.prompt.TaskPromptContext
 
 /**
@@ -19,11 +19,11 @@ import agent.task.prompt.TaskPromptContext
  */
 class DefaultTaskManager(
     initialTask: TaskState? = null,
-    private val repository: TaskStateRepository? = null
+    private val repository: TaskSessionStateRepository? = null
 ) : TaskManager {
     private var session: TaskSessionState = initialTask
         ?.let(::sessionForSingleTask)
-        ?: repository?.load()?.let(::sessionForSingleTask)
+        ?: repository?.load()
         ?: TaskSessionState()
 
     override fun sessionState(): TaskSessionState = session
@@ -94,7 +94,7 @@ class DefaultTaskManager(
             tasks = listOf(activeTask),
             activeTaskId = activeTask.id
         )
-        repository?.save(taskState)
+        repository?.save(session)
     }
 
     /**
