@@ -87,4 +87,48 @@ class DebugTraceListenerTest {
             record.lines
         )
     }
+
+    @Test
+    fun `writes task list as structured trace block`() {
+        val tempDir = createTempDirectory()
+        val traceFile = tempDir.resolve("task-list-trace.jsonl")
+        val listener = DebugTraceListener(traceFile)
+
+        listener.emit(
+            AppEvent.TaskListAvailable(
+                tasks = listOf(
+                    agent.task.model.TaskItem(
+                        id = "task-1",
+                        title = "Первая задача",
+                        stage = TaskStage.EXECUTION,
+                        currentStep = "Подключить CLI",
+                        expectedAction = ExpectedAction.AGENT_EXECUTION,
+                        status = TaskStatus.PAUSED
+                    ),
+                    agent.task.model.TaskItem(
+                        id = "task-2",
+                        title = "Вторая задача",
+                        stage = TaskStage.VALIDATION,
+                        currentStep = "Проверить список задач",
+                        expectedAction = ExpectedAction.USER_CONFIRMATION,
+                        status = TaskStatus.ACTIVE
+                    )
+                ),
+                activeTaskId = "task-2"
+            )
+        )
+
+        val record = Json.decodeFromString<DebugTraceRecord>(Files.readAllLines(traceFile).single())
+
+        assertEquals("task_list", record.kind)
+        assertEquals("Задачи", record.title)
+        assertEquals(
+            listOf(
+                "Активная задача: task-2",
+                "  task-1 | Первая задача | на паузе | Выполнение",
+                "* task-2 | Вторая задача | активна | Проверка"
+            ),
+            record.lines
+        )
+    }
 }

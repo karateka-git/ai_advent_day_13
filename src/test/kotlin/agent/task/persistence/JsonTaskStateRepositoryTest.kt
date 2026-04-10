@@ -31,7 +31,7 @@ class JsonTaskStateRepositoryTest {
                     stage = TaskStage.VALIDATION,
                     currentStep = "Проверить JSON persistence",
                     expectedAction = ExpectedAction.USER_CONFIRMATION,
-                    status = TaskStatus.PAUSED
+                    status = TaskStatus.ACTIVE
                 )
             ),
             activeTaskId = "task-1"

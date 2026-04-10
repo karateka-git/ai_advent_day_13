@@ -1,0 +1,6 @@
+/task list
+/task show
+/task switch task-1
+/task list
+/task show
+/exit

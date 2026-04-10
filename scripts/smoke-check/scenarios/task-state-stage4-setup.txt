@@ -1,0 +1,14 @@
+/task start Первая задача
+/task stage execution
+/task step Подключить CLI multitask surface
+/task pause
+/task start Вторая задача
+/task stage planning
+/task step Подготовить список задач
+/task list
+/task switch task-1
+/task list
+/task resume task-2
+/task done task-1
+/task list
+/exit

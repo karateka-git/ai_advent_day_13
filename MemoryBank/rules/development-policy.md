@@ -1,6 +1,6 @@
-﻿# Development Policy
+# Development Policy
 
-## Совместимость со старыми версиями
+## Совместимость Со Старыми Версиями
 
 В этом проекте по умолчанию не нужно добавлять или сохранять обратную совместимость со старыми версиями, форматами состояния, старыми JSON-структурами или legacy-поведением, если пользователь явно не попросил об этом.
 
@@ -38,6 +38,7 @@
 - versioned scripted-сценарии должны лежать в репозитории, а не в `build/`; для них использовать каталог `scripts/smoke-check/scenarios/`;
 - `build/smoke-check/` использовать только для артефактов прогонов: вывода, JSON-снимков и временных результатов;
 - для изолированной проверки каждой стратегии сначала очищать `config/conversations/*`, иначе сценарии будут использовать уже существующие persisted state;
+- для task-state smoke-check дополнительно очищать `config/tasks/*`, чтобы multitask setup/verify начинались с предсказуемых `task-1` и `task-2`;
 - перед новым scripted smoke-check очищать старые артефакты в `build/smoke-check/`, если они больше не нужны, чтобы результаты прошлых прогонов не смешивались с текущими;
 - допустимо удалять старые выходные файлы и JSON-снимки из `build/smoke-check/` перед новым прогоном, если пользователь не просил их сохранить отдельно;
 - для scripted-прогона удобно повторно вызывать `use timeweb`, чтобы заново выбрать стратегию и не зависеть от другого провайдера;
@@ -54,8 +55,8 @@
   - `shortTerm` ожидается всегда;
   - `working`, `longTerm` и `pending` могут отсутствовать в persisted JSON, если слой пустой;
   - отсутствие пустого слоя не считать ошибкой smoke-check;
-- после внедрения pending-confirmation flow при проверке layered memory учитывать, что часть фактов может попасть не сразу в `working` или `longTerm`, а в `pending`.
+- после внедрения pending-confirmation flow при проверке layered memory учитывать, что часть фактов может попасть не сразу в `working` или `longTerm`, а в `pending`;
 - для scripted smoke-check source of truth для transcript теперь должен идти из structured trace, который пишет `DebugTraceListener`;
 - helper `scripts/run-scripted-session.ps1` не должен зависеть от парсинга UI-строк вроде `Пользователь`, `Ассистент` или box-drawing символов;
-- `build/smoke-check/*-output.txt` нужно собирать из trace-артефакта; отдельный сырой stdout по умолчанию больше не сохраняется.
-
+- `build/smoke-check/*-output.txt` нужно собирать из trace-артефакта; отдельный сырой stdout по умолчанию больше не сохраняется;
+- для multitask-верификации task state использовать stage 4 сценарии `task-state-stage4-setup.txt` и `task-state-stage4-verify.txt`; они тоже должны читаться через `DebugTraceListener`, а не через текст UI.
