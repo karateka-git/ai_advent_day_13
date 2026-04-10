@@ -1,7 +1,0 @@
-/task start Первая задача
-/task pause
-/task start Вторая задача
-/task stage validation
-/task step Проверить вторую задачу
-/task show
-/exit

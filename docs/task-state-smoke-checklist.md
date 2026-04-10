@@ -11,7 +11,7 @@
 ## Общие правила
 
 - перед scripted smoke-check всегда делать свежие `.\gradlew.bat build` и `.\gradlew.bat installDist`;
-- перед multitask smoke-check очищать `config/conversations/*` и `config/tasks/*`, чтобы `task-1` и `task-2` создавались предсказуемо;
+- перед task smoke-check очищать `config/conversations/*` и `config/tasks/*`, чтобы `task-1` и `task-2` создавались предсказуемо;
 - перед первым прогоном в серии очищать `build/smoke-check/*`, чтобы в папке оставались только актуальные артефакты;
 - `setup` и `verify` запускать строго последовательно;
 - ориентироваться на `build/smoke-check/*-trace.jsonl` и `build/smoke-check/*-output.txt`;
@@ -21,39 +21,23 @@
 
 ## Актуальные сценарии
 
-### Stage 1
+- `scripts/smoke-check/scenarios/task-state-setup.txt`
+- `scripts/smoke-check/scenarios/task-state-verify.txt`
 
-- `scripts/smoke-check/scenarios/task-state-stage1-setup.txt`
-- `scripts/smoke-check/scenarios/task-state-stage1-verify.txt`
-
-### Stage 2
-
-- `scripts/smoke-check/scenarios/task-state-stage2.txt`
-
-### Stage 3
-
-- `scripts/smoke-check/scenarios/task-state-stage3-setup.txt`
-- `scripts/smoke-check/scenarios/task-state-stage3-verify.txt`
-
-### Stage 4
-
-- `scripts/smoke-check/scenarios/task-state-stage4-setup.txt`
-- `scripts/smoke-check/scenarios/task-state-stage4-verify.txt`
-
-## Stage 4 Smoke
+## Task Smoke
 
 ### Setup
 
 Команда:
 
 ```powershell
-.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-stage4-setup.txt -OutputFile .\build\smoke-check\task-state-stage4-setup-output.txt -ClearConversations -ClearSmokeArtifacts
+.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-setup.txt -OutputFile .\build\smoke-check\task-state-setup-output.txt -ClearConversations -ClearSmokeArtifacts
 ```
 
 Что проверяем:
 - создаются две задачи;
 - первая задача уходит в `paused`, когда создаётся вторая;
-- `switch task-1` делает первой задачу активной;
+- `switch task-1` делает первую задачу активной;
 - после `switch task-1` обычное сообщение уходит в LLM уже с контекстом первой задачи;
 - `resume task-2` возвращает вторую задачу в active;
 - после `resume task-2` обычное сообщение уходит в LLM уже с контекстом второй задачи;
@@ -66,7 +50,7 @@
 Команда:
 
 ```powershell
-.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-stage4-verify.txt -OutputFile .\build\smoke-check\task-state-stage4-verify-output.txt
+.\scripts\run-scripted-session.ps1 -ScenarioFile .\scripts\smoke-check\scenarios\task-state-verify.txt -OutputFile .\build\smoke-check\task-state-verify-output.txt
 ```
 
 Что проверяем:
@@ -79,7 +63,7 @@
 
 ## Критерий успешности
 
-Smoke-check stage 4 считается успешным, если:
+Task smoke-check считается успешным, если:
 - оба scripted-прогона завершаются без ошибок;
 - `task-1` и `task-2` переживают restart;
 - только одна задача активна;

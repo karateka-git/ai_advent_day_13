@@ -70,5 +70,5 @@
 - для scripted smoke-check source of truth для transcript теперь должен идти из structured trace, который пишет `DebugTraceListener`;
 - helper `scripts/run-scripted-session.ps1` не должен зависеть от парсинга UI-строк вроде `Пользователь`, `Ассистент` или box-drawing символов;
 - `build/smoke-check/*-output.txt` нужно собирать из trace-артефакта; отдельный сырой stdout по умолчанию больше не сохраняется;
-- для multitask-верификации task state использовать stage 4 сценарии `task-state-stage4-setup.txt` и `task-state-stage4-verify.txt`; они тоже должны читаться через `DebugTraceListener`, а не через текст UI.
+- для task-state smoke-check использовать единые сценарии `task-state-setup.txt` и `task-state-verify.txt`; они должны читаться через `DebugTraceListener`, а не через текст UI.
 - `setup` и `verify`, использующие один и тот же persisted state, всегда запускать строго последовательно; параллельный прогон делает результат недостоверным, даже если оба процесса формально завершаются успешно.

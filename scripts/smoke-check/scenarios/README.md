@@ -6,7 +6,7 @@
 - сценарии проверки должны жить в репозитории, чтобы быть доступны разработчику и тестировщику;
 - `build/smoke-check/` используется только для артефактов прогонов:
   - текстового вывода;
-  - JSON-снимков состояния;
+  - structured trace;
   - временных результатов отдельных запусков.
 
 Базовые сценарии:
@@ -17,5 +17,9 @@
 - `sliding-window.txt`
 - `sticky-facts.txt`
 - `branching.txt`
-- `task-state-stage1-setup.txt`
-- `task-state-stage1-verify.txt`
+- `profiles.txt`
+- `stepwise-memory.txt`
+
+Сценарии для task subsystem:
+- `task-state-setup.txt`
+- `task-state-verify.txt`
