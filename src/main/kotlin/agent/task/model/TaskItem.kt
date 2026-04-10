@@ -22,7 +22,7 @@ data class TaskItem(
     val status: TaskStatus = TaskStatus.ACTIVE
 ) {
     /**
-     * Возвращает совместимое представление активной задачи для текущего single-task API.
+     * Возвращает совместимое single-task представление задачи.
      */
     fun toTaskState(): TaskState = TaskState(
         title = title,
@@ -34,7 +34,7 @@ data class TaskItem(
 
     companion object {
         /**
-         * Создаёт TaskItem из совместимого TaskState.
+         * Создаёт [TaskItem] из совместимого single-task представления [TaskState].
          */
         fun fromTaskState(id: String, taskState: TaskState): TaskItem = TaskItem(
             id = id,

@@ -11,11 +11,10 @@ import agent.task.persistence.TaskSessionStateRepository
 import agent.task.prompt.TaskPromptContext
 
 /**
- * In-memory реализация [TaskManager], которая уже хранит session state, но снаружи пока работает
- * через совместимый single-task API активной задачи.
+ * In-memory реализация [TaskManager].
  *
- * На этапе 3 менеджер ещё не раскрывает полноценный multitask UX, но уже держит явную task session
- * с активной задачей и готов к последующему расширению.
+ * Хранит полное task session state, управляет переключением активной задачи и поддерживает
+ * совместимый single-task view для мест, которые работают с текущей сфокусированной задачей.
  */
 class DefaultTaskManager(
     initialTask: TaskState? = null,
@@ -220,14 +219,14 @@ class DefaultTaskManager(
         session.tasks.lastOrNull { it.status == TaskStatus.PAUSED }
 
     /**
-     * Возвращает задачу для совместимого single-task API: active task, если она есть, иначе
+     * Возвращает задачу для совместимого single-task view: active task, если она есть, иначе
      * последний сохранённый рабочий трек.
      */
     private fun currentCompatibleTask(): TaskItem? =
         activeTask() ?: session.tasks.lastOrNull()
 
     /**
-     * Применяет compatible no-arg resume к последней paused-задаче, если активной сейчас нет.
+     * Возобновляет последнюю paused-задачу, если активной задачи сейчас нет.
      */
     private fun resumeCurrentOrLastPausedTask(): TaskState {
         activeTask()?.let { return it.toTaskState() }

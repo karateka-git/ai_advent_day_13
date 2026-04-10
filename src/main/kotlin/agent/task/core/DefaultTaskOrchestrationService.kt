@@ -6,7 +6,7 @@ import agent.task.model.TaskState
 import agent.task.model.TaskStatus
 
 /**
- * Базовая policy-реализация stage 2, которая превращает task state в typed orchestration-решение.
+ * Базовая policy-реализация, которая превращает task state в typed orchestration-решение.
  */
 class DefaultTaskOrchestrationService : TaskOrchestrationService {
     override fun evaluate(taskState: TaskState?): TaskGuardDecision {

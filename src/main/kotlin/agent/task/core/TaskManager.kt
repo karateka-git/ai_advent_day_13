@@ -8,7 +8,7 @@ import agent.task.model.TaskState
 import agent.task.prompt.TaskPromptContext
 
 /**
- * Управляет task session state и совместимым single-task API активной задачи.
+ * Управляет task session state и предоставляет доступ к активной задаче и task-oriented операциям.
  */
 interface TaskManager {
     /**
@@ -27,10 +27,10 @@ interface TaskManager {
     fun activeTask(): TaskItem?
 
     /**
-     * Возвращает текущую задачу в совместимом single-task виде.
+     * Возвращает текущую сфокусированную задачу в совместимом single-task виде.
      *
-     * В multitask-модели это прежде всего active task, но при её отсутствии метод может вернуть
-     * последний сохранённый рабочий трек, чтобы не ломать существующий single-task contract.
+     * В первую очередь это active task. Если активной задачи нет, метод может вернуть
+     * последний сохранённый рабочий трек для совместимого single-task view.
      */
     fun currentTask(): TaskState?
 
@@ -70,8 +70,7 @@ interface TaskManager {
     fun pauseTask(): TaskState
 
     /**
-     * Возобновляет текущую активную задачу или последнюю paused-задачу в совместимом single-task
-     * режиме.
+     * Возобновляет активную задачу или последнюю paused-задачу через совместимый single-task flow.
      */
     fun resumeTask(): TaskState
 
